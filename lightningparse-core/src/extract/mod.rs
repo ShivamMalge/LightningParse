@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use crate::errors::ParseError;
 use crate::output::{Block, Page, Span};
 
-// ── Public API ──────────────────────────────────────────────────
+pub mod page_tree;
 
 /// Extract structured text from a digital-native PDF loaded into memory.
 ///
@@ -26,13 +26,7 @@ use crate::output::{Block, Page, Span};
 pub fn extract_text(
     doc: &Document,
 ) -> Result<Vec<(u32, Vec<Block>, usize, Vec<String>)>, ParseError> {
-    let pages_map = doc.get_pages(); // BTreeMap<u32, ObjectId>
-
-    if pages_map.is_empty() {
-        return Err(ParseError::CorruptPdf(
-            "Document has 0 pages or page tree is malformed/unreadable by lopdf.".to_string(),
-        ));
-    }
+    let pages_map = page_tree::get_pages_tolerant(doc)?;
 
     // Collect entries so rayon can partition them across threads.
     let entries: Vec<(u32, ObjectId)> = pages_map.iter().map(|(&n, &id)| (n, id)).collect();
