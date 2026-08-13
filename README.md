@@ -4,6 +4,11 @@ Fast, accurate PDF parsing for RAG pipelines — a Rust extraction core (via PyO
 
 > **Status:** published on PyPI (`pip install lightningparse`). Core pipeline complete — Rust extraction, cleanup, OCR fallback, semantic block typing, chunking, retrieval, and generation are all implemented and benchmarked end-to-end. See [`PHASES.md`](./PHASES.md) for the original build roadmap and [`BENCHMARKS.md`](./benchmarks/BENCHMARKS.md) for full results.
 
+## What's New in v3.1.0
+
+- **Fault-Tolerant Page Tree Traversal**: We replaced `lopdf`'s strict page tree parser with a custom fault-tolerant tree walker mimicking `PyPDF2`. LightningParse will now successfully extract text from malformed PDFs that omit or mis-capitalize `/Type /Pages` or `/Type /Page` tags, and will safely abort on circular reference loops.
+- **Explicit Error Propagation**: Instead of silently returning an empty pages array on fatal parsing errors, the FFI boundary now correctly throws a `CorruptPdfError` exception to fail loudly in Python pipelines.
+
 ## What's New in v0.3.0
 
 - **Semantic block typing**: text blocks are now classified with a `block_role` — `"heading"` (detected via document-relative font-size/weight heuristics) or `"code"` (detected via structural monospace-font analysis)
