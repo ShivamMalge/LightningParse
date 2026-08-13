@@ -5,24 +5,47 @@ use crate::errors::ParseError;
 
 /// A robust, fault-tolerant replacement for `lopdf::Document::get_pages()`.
 ///
-/// It mimics PyPDF2's leniency:
-/// - If a dictionary contains a `/Kids` array, it is a `Pages` node, regardless of `/Type`.
-/// - If it doesn't have `/Kids` but is reached via a `Kids` array, it's a `Page`.
-/// - Detects cycles to avoid infinite loops on corrupted PDFs.
-/// - If the root catalog fails, it falls back to scanning all objects for `Page`-like dictionaries.
+/// Mimics PyPDF2's leniency when traversing the page tree:
+///
+/// - **`/Kids`-based traversal:** If a dictionary contains a `/Kids` array,
+///   it is treated as an intermediate `Pages` node regardless of its `/Type`.
+/// - **Leaf detection:** A dictionary reached via a `/Kids` array that does
+///   *not* contain a `/Kids` key is treated as a leaf `Page` node.
+/// - **Malformed `/Kids`:** If a `/Kids` key exists but its value cannot be
+///   resolved or is not an array, the node is logged as malformed and skipped.
+///   It is *not* silently reinterpreted as a leaf `Page`.
+/// - **Cycle detection:** A `HashSet<ObjectId>` tracks visited nodes to safely
+///   abort on circular `/Kids` references without stack overflow.
+/// - **Catalog fallback:** If the root catalog's `/Pages` entry is missing or
+///   the tree walk produces zero pages, a conservative full-object scan looks
+///   for dictionaries with strong page-like evidence (`/Type /Page`,
+///   `/Contents`, or `/MediaBox` without `/Kids`).
+///
+/// # Page ordering
+///
+/// When traversal succeeds via the catalog `/Pages` tree, pages are numbered
+/// in the order they appear in the `/Kids` arrays (depth-first, left-to-right),
+/// which matches the logical document page order defined by the PDF spec.
+///
+/// When the **fallback** full-object scan is used (catalog `/Pages` missing or
+/// entirely broken), pages are numbered in whatever order `doc.objects` iterates
+/// — typically PDF object-table order. This **must not** be treated as
+/// guaranteed document page order; it is a best-effort recovery for severely
+/// corrupted files where the page tree is completely unavailable.
 pub fn get_pages_tolerant(doc: &Document) -> Result<BTreeMap<u32, ObjectId>, ParseError> {
     let mut pages = BTreeMap::new();
-    let mut page_num = 1;
+    let mut page_num: u32 = 1;
     let mut visited = HashSet::new();
 
-    // 1. Try to start from catalog's Pages
+    // 1. Try to start from catalog's /Pages reference.
     if let Ok(catalog) = doc.catalog() {
         if let Ok(pages_ref) = catalog.get(b"Pages").and_then(Object::as_reference) {
             walk_tree(doc, pages_ref, &mut pages, &mut page_num, &mut visited);
         }
     }
 
-    // 2. Fallback: if pages is still empty, scan all objects conservatively.
+    // 2. Fallback: if traversal found nothing, scan all objects conservatively.
+    //    See doc-comment above for ordering caveats.
     if pages.is_empty() {
         for (id, obj) in &doc.objects {
             if let Ok(dict) = obj.as_dict() {
@@ -50,42 +73,75 @@ fn walk_tree(
     page_num: &mut u32,
     visited: &mut HashSet<ObjectId>,
 ) {
+    // Cycle detection: abort if we've already visited this node.
     if !visited.insert(node_id) {
-        // Cycle detected
+        eprintln!(
+            "lightningparse: page tree cycle detected at object {:?}, skipping",
+            node_id
+        );
         return;
     }
 
-    if let Ok(dict) = doc.get_dictionary(node_id) {
-        // Heuristic: If it has a Kids array, it's an intermediate Pages node
-        if let Ok(kids) = dict.get_deref(b"Kids", doc).and_then(Object::as_array) {
-            for kid in kids {
-                if let Ok(kid_id) = kid.as_reference() {
-                    walk_tree(doc, kid_id, pages, page_num, visited);
+    // Attempt to resolve the node as a dictionary.
+    let dict = match doc.get_dictionary(node_id) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!(
+                "lightningparse: failed to resolve page-tree node {:?}: {}, skipping",
+                node_id, e
+            );
+            return;
+        }
+    };
+
+    // Distinguish: /Kids key absent vs /Kids key present.
+    if dict.has(b"Kids") {
+        // /Kids key exists — attempt to dereference and interpret as array.
+        match dict.get_deref(b"Kids", doc).and_then(Object::as_array) {
+            Ok(kids) => {
+                for kid in kids {
+                    if let Ok(kid_id) = kid.as_reference() {
+                        walk_tree(doc, kid_id, pages, page_num, visited);
+                    }
                 }
             }
-        } else {
-            // No Kids array. Since we reached it by walking the page tree,
-            // it is treated as a leaf Page node.
-            pages.insert(*page_num, node_id);
-            *page_num += 1;
+            Err(_) => {
+                // /Kids exists but is malformed (not resolvable or not an array).
+                // This is a broken intermediate node — do NOT treat it as a Page.
+                eprintln!(
+                    "lightningparse: object {:?} has malformed /Kids entry, skipping subtree",
+                    node_id
+                );
+            }
         }
+    } else {
+        // No /Kids key at all. Since we reached this node by walking the
+        // page tree, it is a leaf Page node (attributes may be inherited
+        // from ancestor Pages nodes per the PDF spec).
+        pages.insert(*page_num, node_id);
+        *page_num += 1;
     }
 }
 
+/// Conservative heuristic for the full-object fallback scan.
+///
+/// Returns `true` only if the dictionary looks like a standalone Page:
+/// - Must NOT have `/Kids` (that would indicate an intermediate `Pages` node).
+/// - Either has explicit `/Type /Page` (case-insensitive), or
+/// - Has `/Contents` or `/MediaBox` (strong page-like evidence).
 fn is_page_fallback(dict: &Dictionary) -> bool {
-    // Must NOT have Kids (otherwise it's a Pages node)
     if dict.has(b"Kids") {
         return false;
     }
 
-    // Explicit Type == Page
+    // Explicit /Type == Page (case-insensitive)
     if let Ok(t) = dict.get(b"Type").and_then(Object::as_name) {
         if t.eq_ignore_ascii_case(b"Page") {
             return true;
         }
     }
 
-    // Without explicit Type, require strong evidence: Contents or MediaBox
+    // Without explicit Type, require strong evidence.
     dict.has(b"Contents") || dict.has(b"MediaBox")
 }
 
@@ -98,6 +154,8 @@ mod tests {
     fn make_doc() -> Document {
         Document::with_version("1.5")
     }
+
+    // ── Normal valid page tree ────────────────────────────────────
 
     #[test]
     fn test_valid_normal_page_tree() {
@@ -125,6 +183,8 @@ mod tests {
         assert_eq!(pages[&1], page_id);
     }
 
+    // ── Missing /Type /Pages ──────────────────────────────────────
+
     #[test]
     fn test_missing_type_pages() {
         let mut doc = make_doc();
@@ -146,13 +206,16 @@ mod tests {
 
         let pages = get_pages_tolerant(&doc).unwrap();
         assert_eq!(pages.len(), 1);
+        assert_eq!(pages[&1], page_id);
     }
+
+    // ── Missing /Type /Page ───────────────────────────────────────
 
     #[test]
     fn test_missing_type_page() {
         let mut doc = make_doc();
 
-        // Omit Type=Page
+        // Omit Type=Page entirely
         let mut page = LoDictionary::new();
         page.set("MediaBox", Object::Array(vec![]));
         let page_id = doc.add_object(page);
@@ -171,16 +234,18 @@ mod tests {
         assert_eq!(pages[&1], page_id);
     }
 
+    // ── Malformed / case-variant /Type ────────────────────────────
+
     #[test]
     fn test_malformed_type_values() {
         let mut doc = make_doc();
 
         let mut page = LoDictionary::new();
-        page.set("Type", Object::Name(b"PAGE".to_vec())); // uppercase
+        page.set("Type", Object::Name(b"PAGE".to_vec())); // wrong case
         let page_id = doc.add_object(page);
 
         let mut pages_node = LoDictionary::new();
-        pages_node.set("Type", Object::Name(b"PaGeS".to_vec()));
+        pages_node.set("Type", Object::Name(b"PaGeS".to_vec())); // wrong case
         pages_node.set("Kids", Object::Array(vec![Object::Reference(page_id)]));
         let pages_id = doc.add_object(pages_node);
 
@@ -191,17 +256,82 @@ mod tests {
 
         let pages = get_pages_tolerant(&doc).unwrap();
         assert_eq!(pages.len(), 1);
+        assert_eq!(pages[&1], page_id);
     }
+
+    // ── Nested page tree ──────────────────────────────────────────
+    //
+    // Catalog → Root Pages → [Intermediate A, Intermediate B]
+    //   Intermediate A → [Page 1, Page 2]
+    //   Intermediate B → [Page 3]
+
+    #[test]
+    fn test_nested_page_tree() {
+        let mut doc = make_doc();
+
+        let mut page1 = LoDictionary::new();
+        page1.set("Type", Object::Name(b"Page".to_vec()));
+        page1.set("MediaBox", Object::Array(vec![]));
+        let page1_id = doc.add_object(page1);
+
+        let mut page2 = LoDictionary::new();
+        page2.set("Type", Object::Name(b"Page".to_vec()));
+        page2.set("MediaBox", Object::Array(vec![]));
+        let page2_id = doc.add_object(page2);
+
+        let mut page3 = LoDictionary::new();
+        page3.set("Type", Object::Name(b"Page".to_vec()));
+        page3.set("MediaBox", Object::Array(vec![]));
+        let page3_id = doc.add_object(page3);
+
+        // Intermediate A: no /Type, just /Kids
+        let mut intermediate_a = LoDictionary::new();
+        intermediate_a.set(
+            "Kids",
+            Object::Array(vec![
+                Object::Reference(page1_id),
+                Object::Reference(page2_id),
+            ]),
+        );
+        let ia_id = doc.add_object(intermediate_a);
+
+        // Intermediate B: no /Type, just /Kids
+        let mut intermediate_b = LoDictionary::new();
+        intermediate_b.set("Kids", Object::Array(vec![Object::Reference(page3_id)]));
+        let ib_id = doc.add_object(intermediate_b);
+
+        // Root Pages node
+        let mut root_pages = LoDictionary::new();
+        root_pages.set("Type", Object::Name(b"Pages".to_vec()));
+        root_pages.set(
+            "Kids",
+            Object::Array(vec![Object::Reference(ia_id), Object::Reference(ib_id)]),
+        );
+        let root_pages_id = doc.add_object(root_pages);
+
+        let mut catalog = LoDictionary::new();
+        catalog.set("Type", Object::Name(b"Catalog".to_vec()));
+        catalog.set("Pages", Object::Reference(root_pages_id));
+        let cat_id = doc.add_object(catalog);
+        doc.trailer.set("Root", Object::Reference(cat_id));
+
+        let pages = get_pages_tolerant(&doc).unwrap();
+        assert_eq!(pages.len(), 3);
+        assert_eq!(pages[&1], page1_id);
+        assert_eq!(pages[&2], page2_id);
+        assert_eq!(pages[&3], page3_id);
+    }
+
+    // ── Inherited page attributes ─────────────────────────────────
 
     #[test]
     fn test_inherited_page_attributes() {
         let mut doc = make_doc();
 
-        // Leaf node completely empty except maybe an ID, relying on being in Kids array
+        // Leaf node with no attributes at all — relies on inherited MediaBox
         let page = LoDictionary::new();
         let page_id = doc.add_object(page);
 
-        // Parent provides MediaBox
         let mut pages_node = LoDictionary::new();
         pages_node.set("MediaBox", Object::Array(vec![]));
         pages_node.set("Kids", Object::Array(vec![Object::Reference(page_id)]));
@@ -217,6 +347,8 @@ mod tests {
         assert_eq!(pages[&1], page_id);
     }
 
+    // ── Circular /Kids references ─────────────────────────────────
+
     #[test]
     fn test_circular_kids_references() {
         let mut doc = make_doc();
@@ -225,9 +357,8 @@ mod tests {
         page.set("Type", Object::Name(b"Page".to_vec()));
         let page_id = doc.add_object(page);
 
-        // Create cycle between pages1 and pages2
-        let pages1_id = (100, 0);
-        let pages2_id = (101, 0);
+        let pages1_id: ObjectId = (100, 0);
+        let pages2_id: ObjectId = (101, 0);
 
         let mut pages1 = LoDictionary::new();
         pages1.set(
@@ -249,36 +380,119 @@ mod tests {
         let cat_id = doc.add_object(catalog);
         doc.trailer.set("Root", Object::Reference(cat_id));
 
-        // Should not stack overflow, and should find the 1 valid page
         let pages = get_pages_tolerant(&doc).unwrap();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[&1], page_id);
     }
 
+    // ── Malformed /Kids (key present but not an array) ────────────
+
+    #[test]
+    fn test_malformed_kids_not_treated_as_page() {
+        let mut doc = make_doc();
+
+        // A real page that should be found
+        let mut page = LoDictionary::new();
+        page.set("Type", Object::Name(b"Page".to_vec()));
+        page.set("MediaBox", Object::Array(vec![]));
+        let page_id = doc.add_object(page);
+
+        // Malformed intermediate: /Kids is an integer, not an array.
+        let mut malformed = LoDictionary::new();
+        malformed.set("Kids", Object::Integer(42));
+        let malformed_id = doc.add_object(malformed);
+
+        // Root Pages node with both children
+        let mut root_pages = LoDictionary::new();
+        root_pages.set(
+            "Kids",
+            Object::Array(vec![
+                Object::Reference(malformed_id),
+                Object::Reference(page_id),
+            ]),
+        );
+        let root_id = doc.add_object(root_pages);
+
+        let mut catalog = LoDictionary::new();
+        catalog.set("Pages", Object::Reference(root_id));
+        let cat_id = doc.add_object(catalog);
+        doc.trailer.set("Root", Object::Reference(cat_id));
+
+        let pages = get_pages_tolerant(&doc).unwrap();
+
+        // The malformed node must NOT be counted as a page.
+        // Only the real page should appear.
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[&1], page_id);
+    }
+
+    // ── Missing catalog /Pages entry → fallback ───────────────────
+
     #[test]
     fn test_missing_catalog_pages_entry_fallback() {
         let mut doc = make_doc();
 
-        // No catalog Pages entry.
         let catalog = LoDictionary::new();
         let cat_id = doc.add_object(catalog);
         doc.trailer.set("Root", Object::Reference(cat_id));
 
-        // Create a standalone page dictionary
         let mut page = LoDictionary::new();
         page.set("Type", Object::Name(b"Page".to_vec()));
         let page_id = doc.add_object(page);
 
         let mut page2 = LoDictionary::new();
-        page2.set("Contents", Object::Array(vec![])); // No Type, but has Contents
+        page2.set("Contents", Object::Array(vec![]));
         let page2_id = doc.add_object(page2);
 
         let pages = get_pages_tolerant(&doc).unwrap();
         assert_eq!(pages.len(), 2);
 
-        // Order isn't guaranteed for fallback, but both should be there
+        // Fallback order is object-table order, not guaranteed document order.
         let ids: Vec<_> = pages.values().copied().collect();
         assert!(ids.contains(&page_id));
         assert!(ids.contains(&page2_id));
+    }
+
+    // ── Explicit lopdf regression proof ───────────────────────────
+    //
+    // Demonstrates that lopdf's native `get_pages()` returns 0 pages
+    // for a page tree missing /Type tags, while our tolerant walker
+    // correctly recovers the pages. This is the exact bug that caused
+    // silent extraction failure on real-world PDFs.
+
+    #[test]
+    fn test_lopdf_get_pages_fails_tolerant_succeeds() {
+        let mut doc = make_doc();
+
+        // Page without /Type /Page
+        let mut page = LoDictionary::new();
+        page.set("MediaBox", Object::Array(vec![]));
+        page.set("Contents", Object::Array(vec![]));
+        let page_id = doc.add_object(page);
+
+        // Pages node without /Type /Pages
+        let mut pages_node = LoDictionary::new();
+        pages_node.set("Kids", Object::Array(vec![Object::Reference(page_id)]));
+        let pages_id = doc.add_object(pages_node);
+
+        let mut catalog = LoDictionary::new();
+        catalog.set("Pages", Object::Reference(pages_id));
+        let cat_id = doc.add_object(catalog);
+        doc.trailer.set("Root", Object::Reference(cat_id));
+
+        // lopdf's strict get_pages() fails — returns empty map
+        let native_pages = doc.get_pages();
+        assert!(
+            native_pages.is_empty(),
+            "Expected lopdf::get_pages() to return 0 pages for missing /Type tags, \
+             but got {}. If lopdf has been updated to handle this case, \
+             this regression test should be revisited.",
+            native_pages.len()
+        );
+
+        // Our tolerant walker succeeds
+        let tolerant_pages = get_pages_tolerant(&doc).unwrap();
+        assert_eq!(tolerant_pages.len(), 1);
+        assert_eq!(tolerant_pages[&1], page_id);
     }
 }

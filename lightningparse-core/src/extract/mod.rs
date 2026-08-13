@@ -1470,12 +1470,10 @@ mod tests {
             "Count" => Object::Integer(page_ids.len() as i64),
         });
         for &pid in &page_ids {
-            if let Ok(obj) = doc.objects.get(&pid).ok_or(()) {
-                if let Object::Dictionary(ref d) = *obj {
-                    let mut d2 = d.clone();
-                    d2.set("Parent", Object::Reference(pages_id));
-                    doc.objects.insert(pid, Object::Dictionary(d2));
-                }
+            if let Some(Object::Dictionary(d)) = doc.objects.get(&pid) {
+                let mut d2 = d.clone();
+                d2.set("Parent", Object::Reference(pages_id));
+                doc.objects.insert(pid, Object::Dictionary(d2));
             }
         }
         let catalog_id = doc.add_object(dictionary! {
