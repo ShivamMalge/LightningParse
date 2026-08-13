@@ -15,7 +15,7 @@ fn main() {
         return;
     }
     let doc = Document::load(&args[1]).unwrap();
-    let pages = doc.get_pages();
+    let pages = lightningparse::extract::page_tree::get_pages_tolerant(&doc).unwrap();
 
     // Just look at page 1
     if let Some(&page_id) = pages.get(&1) {

@@ -1501,11 +1501,12 @@ mod tests {
             pages.push(crate::output::Page { page_num, blocks });
             all_warnings.append(&mut warnings);
         }
+        let page_count = pages.len() as u32;
         Ok(crate::output::ParseResult {
             pages,
             metadata: crate::output::DocumentMetadata {
                 tier: "digital".to_string(),
-                page_count: doc.get_pages().len() as u32,
+                page_count,
                 parse_time_ms: 0,
                 warnings: all_warnings,
             },
