@@ -42,7 +42,7 @@ fn main() {
             }
         }
 
-        if let Ok(content_data) = doc.get_page_content(page_id) {
+        let content_data = doc.get_page_content(page_id);
             if let Ok(content) = lopdf::content::Content::decode(&content_data) {
                 for op in content.operations.iter() {
                     if op.operator == "Do" {
@@ -73,7 +73,6 @@ fn main() {
                         }
                     }
                 }
-            }
         }
     }
 

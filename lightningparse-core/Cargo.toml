@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 image = "0.24"
-lopdf = "0.33"
+lopdf = "0.44"
 pyo3 = { version = "0.21", features = ["extension-module"] }
 rayon = "1.10"
 rusty-tesseract = "1.1.10"

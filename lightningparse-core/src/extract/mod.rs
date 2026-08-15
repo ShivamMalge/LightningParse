@@ -66,8 +66,9 @@ fn extract_page(
         if let Ok(stream) = doc.get_object(stream_id).and_then(|o| o.as_stream()) {
             if let Ok(filters) = stream.filters() {
                 for filter in filters {
-                    if filter != "FlateDecode" && filter != "LZWDecode" {
-                        let msg = format!("Page {page_num}: content stream uses unsupported filter '{filter}', falling back to OCR");
+                    if filter != b"FlateDecode" && filter != b"LZWDecode" {
+                        let filter_str = String::from_utf8_lossy(filter);
+                        let msg = format!("Page {page_num}: content stream uses unsupported filter '{filter_str}', falling back to OCR");
                         eprintln!("Warning: {}", msg);
                         warnings.push(msg);
                     }
@@ -77,18 +78,16 @@ fn extract_page(
     }
 
     // Get the content stream bytes (lopdf decompresses + concatenates arrays).
-    let content_bytes = match doc.get_page_content(page_id) {
-        Ok(data) => data,
-        Err(_) => {
-            return Ok((
-                Page {
-                    page_num,
-                    blocks: vec![],
-                },
-                warnings,
-            ))
-        }
-    };
+    let content_bytes = doc.get_page_content(page_id);
+    if content_bytes.is_empty() {
+        return Ok((
+            Page {
+                page_num,
+                blocks: vec![],
+            },
+            warnings,
+        ));
+    }
 
     if content_bytes.is_empty() {
         return Ok((
@@ -1394,7 +1393,7 @@ fn get_stream_content(doc: &Document, obj: &Object) -> Option<Vec<u8>> {
     if let Object::Stream(ref stream) = *resolved {
         let mut s = stream.clone();
         // decompress() may fail on already-decompressed or unsupported filters.
-        s.decompress();
+        let _ = s.decompress();
         Some(s.content)
     } else {
         None
