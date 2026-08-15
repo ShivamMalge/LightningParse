@@ -32,7 +32,7 @@ endobj
 endobj
 6 0 obj
 <<
-/Author (anonymous) /CreationDate (D:20260815162052+05'00') /Creator (anonymous) /Keywords () /ModDate (D:20260815162052+05'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+/Author (anonymous) /CreationDate (D:20260815162809+05'00') /Creator (anonymous) /Keywords () /ModDate (D:20260815162809+05'00') /Producer (ReportLab PDF Library - \(opensource\)) 
   /Subject (unspecified) /Title (untitled) /Trapped /False
 >>
 endobj
@@ -43,10 +43,24 @@ endobj
 endobj
 8 0 obj
 <<
-/Filter [ /ASCII85Decode /FlateDecode ] /Length 384
+/Length 745
 >>
 stream
-Gat$s_/9;t'YO;XF*-/9Q]8W2VS+gc8Wt2eHJ&\C>F-,A!2fGXMlocT)`<$T66=?)]Jg7E)Jm12(%BF%ShmSP]E+L\-K&feiI_M`G+^7)bjla$KctAW5ahbGQ5_&2f#!?A([Dj>_8<0',(7L/#6"XPo9X/P/,)`@&Sk1*'^aPK;hTjEne9E%CtO!L(I:nD)%g(>oYLeQ[Bg[jVk)%UJeT!;"ID$dlr41hLNNf<NOEpq0qK35.PRE8e;>/$HJtre;V+9?B+O1e']!-DKl1;gp]Pa@_=BeL&>%n$>M-9dlMg"@_u7<n4-okpH^lSNm'I1&NDNX:M%Ke\B@XbF:mLj[%hcV(IMMQnmQ$tVIVO*_KF6t^-c8?Ym?;#K"77e[Oo~>endstream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+BT /F1 12 Tf 14.4 TL ET
+BT 1 0 0 1 50 800 Tm (This is a regular paragraph of body text.) Tj T* ET
+BT 1 0 0 1 50 785 Tm (It precedes a code block to ensure we detect the transition.) Tj T* ET
+BT 1 0 0 1 50 770 Tm (We can also call parse\(\) inline.) Tj T* ET
+BT /F2 12 Tf 14.4 TL ET
+BT 1 0 0 1 50 740 Tm (def fibonacci\(n\):) Tj T* ET
+BT 1 0 0 1 50 725 Tm (       if n <= 1:) Tj T* ET
+BT 1 0 0 1 50 710 Tm (              return n) Tj T* ET
+BT 1 0 0 1 50 695 Tm (       return fibonacci\(n-1\) + fibonacci\(n-2\)) Tj T* ET
+BT /F1 12 Tf 14.4 TL ET
+BT 1 0 0 1 50 665 Tm (This is a second paragraph of body text.) Tj T* ET
+BT 1 0 0 1 50 650 Tm (It confirms the code block detection ends correctly.) Tj T* ET
+ 
+endstream
 endobj
 xref
 0 9
@@ -62,7 +76,7 @@ xref
 trailer
 <<
 /ID 
-[<4aa8b15a43f38496b0b820b1689ae4f6><4aa8b15a43f38496b0b820b1689ae4f6>]
+[<473ac2bce980fd7332e9d7cf0f2e8acb><473ac2bce980fd7332e9d7cf0f2e8acb>]
 % ReportLab generated PDF document -- digest (opensource)
 
 /Info 6 0 R
@@ -70,5 +84,5 @@ trailer
 /Size 9
 >>
 startxref
-1379
+1700
 %%EOF
