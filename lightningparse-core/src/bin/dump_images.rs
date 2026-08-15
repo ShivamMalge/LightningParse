@@ -15,7 +15,8 @@ fn main() {
         return;
     }
     let doc = Document::load(&args[1]).unwrap();
-    for (page_num, page_id) in lightningparse::extract::page_tree::get_pages_tolerant(&doc).unwrap() {
+    for (page_num, page_id) in lightningparse::extract::page_tree::get_pages_tolerant(&doc).unwrap()
+    {
         let page = doc.get_object(page_id).unwrap().as_dict().unwrap();
         let res_obj_opt = page.get(b"Resources").ok().or_else(|| {
             let parent_ref = page.get(b"Parent").ok()?;
