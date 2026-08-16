@@ -177,12 +177,35 @@ Follows the same phase-by-phase, plan-before-implement, verify-before-proceeding
 - [x] **PRECONDITION met:** `3.1.0` yank confirmed live on PyPI (both endpoints, 2026-08-16)
 - [x] Bump `version` in `lightningparse-core/pyproject.toml` to `0.4.0` — done, with `Cargo.toml` bumped alongside it (the original checklist did not cover `Cargo.toml`, which had drifted since `0.2.0`). `lightningparse-api/pyproject.toml` stays at `0.1.0` — separate unpublished package, independently versioned.
 - [x] Update `README.md`'s "What's New" section to accurately describe **both** pieces of this release — done in `84b9be4`; the two pieces are given separate bullets, plus a third for the multi-stream join fix. The superseded `## What's New in v3.1.0` section has since been deleted outright, so `v0.4.0` is now the current entry and sits directly above `v0.3.0` with no duplication.
-- [ ] Final full verification pass: `cargo clippy -- -D warnings`, `cargo test`, full corpus regression
-- [ ] Commit, push
-- [ ] `git tag v0.4.0 && git push origin v0.4.0`
-- [ ] Watch GitHub Actions — confirm all build jobs (linux x2, windows, macos x2, sdist) pass, then confirm the `release` job publishes successfully via Trusted Publishing
-- [ ] Verify from a clean environment: `pip install lightningparse==0.4.0 --force-reinstall --no-cache-dir`, confirm `pip show lightningparse` reports `0.4.0`, and re-run a real parse to confirm the ASCII85 fix works from the actual published wheel, not just the local dev build
-  - ⚠️ **This check is insufficient on its own** — pinning `==0.4.0` forces the version, so it passes even while a plain `pip install lightningparse` still resolves to `3.1.0`. Also run an **unpinned** `pip install lightningparse` in a clean environment and assert the resolved version is the intended one. See [`VERSIONING_ISSUE.md`](./VERSIONING_ISSUE.md).
+- [x] Final full verification pass: `cargo clippy -- -D warnings`, `cargo test`, full corpus regression
+- [x] Commit, push
+- [x] `git tag v0.4.0 && git push origin v0.4.0`
+- [x] Watch GitHub Actions — all 28 distributions (linux x2, windows, macos x2, sdist) published to PyPI 2026-08-16 via Trusted Publishing
+- [ ] Verify from a clean environment: `pip install lightningparse --force-reinstall --no-cache-dir` **unpinned**, confirm `pip show lightningparse` reports the intended version, and re-run a real parse to confirm the ASCII85 fix works from the actual published wheel, not just the local dev build
+  - ⚠️ **A pinned check cannot detect this class of problem** — `==<version>` forces the version, so it passes even while a plain `pip install lightningparse` resolves elsewhere. See [`VERSIONING_ISSUE.md`](./VERSIONING_ISSUE.md).
+
+### Phase 6a — v0.4.1 follow-up (PyPI description fix)
+
+`v0.4.0` published successfully, but with the **wrong project description**. The
+`v0.4.0` tag pointed at `01552cb`; the README rewrite that made
+`lightningparse-core/README.md` the canonical PyPI page landed 25 minutes later
+in `cf10367`. The wheels were therefore built from a tree containing the old,
+three-releases-stale README.
+
+**This is not fixable in place.** A PyPI release's description is captured from
+the distribution metadata at upload time and is immutable — there is no API or
+web form to edit it, and re-running the release workflow is a no-op because
+`skip-existing: true` skips all 28 already-uploaded files. Correcting the
+listing requires spending a new version number.
+
+- [x] Bump `pyproject.toml`, `Cargo.toml`, and `Cargo.lock` to `0.4.1` in lockstep
+- [x] Retitle the "What's New" section to `v0.4.1` in both `README.md` and `lightningparse-core/README.md` — `v0.4.1` is the first release whose PyPI listing actually describes this work, so the feature list belongs under it
+- [x] Commit, then `git tag v0.4.1 && git push origin v0.4.1`
+- [ ] Confirm the description updated: `curl -s https://pypi.org/pypi/lightningparse/json | python -c "import json,sys; print(json.load(sys.stdin)['info']['description'][:200])"`
+
+**Release-order rule going forward:** every content commit — README included —
+must be merged *before* the tag is created. The tag is what CI builds from, so
+anything committed after it is invisible to that release.
 
 ---
 

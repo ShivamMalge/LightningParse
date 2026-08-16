@@ -10,6 +10,11 @@
   Keep it current as part of the release checklist. It previously drifted three
   releases behind, so PyPI advertised v0.2.0 content on a v0.4.0 release.
 
+  A PyPI release's description is fixed at upload time and can never be edited,
+  so this file must be correct BEFORE the release tag is created — editing it
+  afterwards does nothing for an already-published version. That is exactly what
+  cost v0.4.1: the v0.4.0 tag was cut 25 minutes before this rewrite landed.
+
   Relative links do NOT resolve on PyPI — always use absolute GitHub URLs here.
 -->
 
@@ -73,7 +78,7 @@ except CorruptPdfError as e:
     print("Unparseable:", e)
 ```
 
-## What's New in v0.4.0
+## What's New in v0.4.1
 
 - **Content stream filter support (`ASCII85Decode` and friends)**: Tier 1 extraction previously decoded only `FlateDecode` and `LZWDecode`. Content streams using any other filter yielded zero extractable characters and were misrouted to Tier 2 OCR — producing degraded OCR output for pages that contained perfectly good digital text. Upgrading to `lopdf` 0.44 and widening the supported-filter allowlist adds `ASCII85Decode`, `ASCIIHexDecode`, and `RunLengthDecode`. Filters outside the supported five still emit a per-page warning and route to OCR, so the visibility mechanism added in v0.3.0 is retained as a safety net.
 - **Fault-tolerant page tree traversal**: `lopdf`'s strict page tree parser is replaced with a custom tolerant tree walker modelled on `PyPDF2`. PDFs that omit or mis-capitalize `/Type /Pages` or `/Type /Page` now extract successfully instead of failing outright, and circular reference loops abort safely rather than looping.

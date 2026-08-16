@@ -4,7 +4,7 @@ Fast, accurate PDF parsing for RAG pipelines — a Rust extraction core (via PyO
 
 > **Status:** published on PyPI (`pip install lightningparse`). Core pipeline complete — Rust extraction, cleanup, OCR fallback, semantic block typing, chunking, retrieval, and generation are all implemented and benchmarked end-to-end. See [`PHASES.md`](./PHASES.md) for the original build roadmap and [`BENCHMARKS.md`](./benchmarks/BENCHMARKS.md) for full results.
 
-## What's New in v0.4.0
+## What's New in v0.4.1
 
 Two independent pieces of work ship in this release.
 
