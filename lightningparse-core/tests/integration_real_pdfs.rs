@@ -301,3 +301,47 @@ fn test_ascii85_digital_extraction() {
         all_text
     );
 }
+
+// ── Multi-stream pages: content-stream join boundary ────────────
+
+/// lopdf 0.42 started inserting a newline between concatenated content
+/// streams.  `multistream_test.pdf` joins two streams at an adversarial
+/// boundary — the first ends with `ET` and the second begins with `BT`, with
+/// no whitespace on either side.  Without the separator the two operators fuse
+/// into a single corrupt `ETBT` token, silently dropping a text-object
+/// boundary rather than raising an error.  This test pins the decoded result.
+#[test]
+fn test_multistream_page_segmentation() {
+    let path = read_corpus_file("multistream_test.pdf");
+    let result = lightningparse::parse_pdf_to_result(&path)
+        .expect("multistream_test.pdf should parse successfully");
+
+    assert_eq!(result.metadata.page_count, 1);
+    assert_eq!(result.metadata.tier, "digital");
+    assert!(
+        result.metadata.warnings.is_empty(),
+        "Uncompressed multi-stream page should not warn, got: {:?}",
+        result.metadata.warnings
+    );
+
+    let blocks = &result.pages[0].blocks;
+
+    // Each stream must yield its own block — a fused ETBT token collapses the
+    // text objects and changes this count.
+    assert_eq!(
+        blocks.len(),
+        2,
+        "Expected one block per content stream, got: {:?}",
+        blocks.iter().map(|b| b.text()).collect::<Vec<_>>()
+    );
+
+    // Reading order is top-down: y=700 before y=650.
+    assert_eq!(blocks[0].text().trim(), "Alpha from stream one");
+    assert_eq!(blocks[1].text().trim(), "Beta from stream two");
+
+    // Text from the second stream must not bleed into the first.
+    assert!(
+        !blocks[0].text().contains("Beta"),
+        "Stream contents must not merge across the join boundary"
+    );
+}
