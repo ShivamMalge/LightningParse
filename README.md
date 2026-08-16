@@ -4,6 +4,14 @@ Fast, accurate PDF parsing for RAG pipelines — a Rust extraction core (via PyO
 
 > **Status:** published on PyPI (`pip install lightningparse`). Core pipeline complete — Rust extraction, cleanup, OCR fallback, semantic block typing, chunking, retrieval, and generation are all implemented and benchmarked end-to-end. See [`PHASES.md`](./PHASES.md) for the original build roadmap and [`BENCHMARKS.md`](./benchmarks/BENCHMARKS.md) for full results.
 
+## What's New in v0.4.0
+
+Two independent pieces of work ship in this release.
+
+- **Content stream filter support (`ASCII85Decode` and friends)**: Tier 1 extraction previously decoded only `FlateDecode` and `LZWDecode`. Content streams using any other filter yielded zero extractable characters and were misrouted to Tier 2 OCR — producing degraded OCR output for pages that contained perfectly good digital text. Upgrading to `lopdf` 0.44 and widening the extractor's supported-filter allowlist adds `ASCII85Decode`, `ASCIIHexDecode`, and `RunLengthDecode`. `ASCII85Decode` — the most common of the three, emitted by older PDF generators and some `reportlab` output — now extracts as digital text with an empty `warnings` array, verified end-to-end by `test_ascii85_digital_extraction`. Filters outside the supported five still emit a per-page warning and route to OCR, so the visibility mechanism added in v0.3.0 is retained unchanged as a safety net.
+- **Fault-tolerant page tree traversal**: `lopdf`'s strict page tree parser is replaced with a custom fault-tolerant tree walker modelled on `PyPDF2`. PDFs that omit or mis-capitalize `/Type /Pages` or `/Type /Page` now extract successfully instead of failing outright, and circular reference loops abort safely rather than looping. Relatedly, the FFI boundary now raises `CorruptPdfError` on fatal parse errors instead of silently returning an empty pages array, so failures surface in Python pipelines rather than passing as empty documents.
+- **Correct handling of multi-stream pages**: a page whose `/Contents` is an array of several streams is now joined with an explicit separator, so streams meeting at a token boundary (e.g. one ending `...Tj ET` and the next beginning `BT ...`) no longer fuse the adjacent operators into a single invalid token. This previously corrupted the text-object structure silently, without raising an error. Covered by `test_multistream_page_segmentation`.
+
 ## What's New in v3.1.0
 
 - **Fault-Tolerant Page Tree Traversal**: We replaced `lopdf`'s strict page tree parser with a custom fault-tolerant tree walker mimicking `PyPDF2`. LightningParse will now successfully extract text from malformed PDFs that omit or mis-capitalize `/Type /Pages` or `/Type /Page` tags, and will safely abort on circular reference loops.
