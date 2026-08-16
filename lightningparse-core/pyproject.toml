@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "lightningparse"
-version = "3.1.0"
+version = "0.4.0"
 description = "Fast, accurate PDF parsing for RAG pipelines — Rust extraction core with Python bindings"
 readme = "README.md"
 license = { text = "MIT" }

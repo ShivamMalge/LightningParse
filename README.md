@@ -12,11 +12,6 @@ Two independent pieces of work ship in this release.
 - **Fault-tolerant page tree traversal**: `lopdf`'s strict page tree parser is replaced with a custom fault-tolerant tree walker modelled on `PyPDF2`. PDFs that omit or mis-capitalize `/Type /Pages` or `/Type /Page` now extract successfully instead of failing outright, and circular reference loops abort safely rather than looping. Relatedly, the FFI boundary now raises `CorruptPdfError` on fatal parse errors instead of silently returning an empty pages array, so failures surface in Python pipelines rather than passing as empty documents.
 - **Correct handling of multi-stream pages**: a page whose `/Contents` is an array of several streams is now joined with an explicit separator, so streams meeting at a token boundary (e.g. one ending `...Tj ET` and the next beginning `BT ...`) no longer fuse the adjacent operators into a single invalid token. This previously corrupted the text-object structure silently, without raising an error. Covered by `test_multistream_page_segmentation`.
 
-## What's New in v3.1.0
-
-- **Fault-Tolerant Page Tree Traversal**: We replaced `lopdf`'s strict page tree parser with a custom fault-tolerant tree walker mimicking `PyPDF2`. LightningParse will now successfully extract text from malformed PDFs that omit or mis-capitalize `/Type /Pages` or `/Type /Page` tags, and will safely abort on circular reference loops.
-- **Explicit Error Propagation**: Instead of silently returning an empty pages array on fatal parsing errors, the FFI boundary now correctly throws a `CorruptPdfError` exception to fail loudly in Python pipelines.
-
 ## What's New in v0.3.0
 
 - **Semantic block typing**: text blocks are now classified with a `block_role` — `"heading"` (detected via document-relative font-size/weight heuristics) or `"code"` (detected via structural monospace-font analysis)
