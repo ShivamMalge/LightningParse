@@ -1,5 +1,19 @@
 # ASCII_PHASES.md
 
+> ## 🚨 RELEASE BLOCKER — READ BEFORE PUBLISHING
+>
+> **Do not publish `v0.4.0` (or any release) until the version numbering issue
+> is resolved.** `3.1.0` was published to PyPI by mistake and is currently
+> PyPI's `latest`. Because `0.4.0` sorts *below* `3.1.0` under PEP 440, a
+> published `0.4.0` would **not** be installed by a plain
+> `pip install lightningparse` — users would silently keep receiving `3.1.0`.
+>
+> **See [`VERSIONING_ISSUE.md`](./VERSIONING_ISSUE.md) for the full picture and
+> the open options. The decision is deferred to a dedicated conversation.**
+>
+> ⚠️ Phase 6's own acceptance check **cannot catch this** — it pins
+> `pip install lightningparse==0.4.0`, so it passes even in the broken state.
+
 Detailed build plan for closing the `ASCII85Decode` content-stream filter gap, tracked as a known limitation since v0.3.0. This ships as part of `v0.4.0` alongside the already-implemented (pending final verification) fault-tolerant page-tree traversal work.
 
 Follows the same phase-by-phase, plan-before-implement, verify-before-proceeding discipline as `PHASES.md` and `PHASES-EXTRACTION-FIDELITY.md`.
@@ -82,6 +96,12 @@ Before writing a custom decoder, check whether the problem is already solved.
 
 ## Phase 6 — Release as v0.4.0
 
+> 🚨 **GATE — this phase is blocked.** Resolve the version numbering issue in
+> [`VERSIONING_ISSUE.md`](./VERSIONING_ISSUE.md) before starting *any* step
+> below. The version number this release ships under is not currently settled,
+> which makes every step in this phase premature.
+
+- [ ] **BLOCKER:** version numbering decision made and applied per [`VERSIONING_ISSUE.md`](./VERSIONING_ISSUE.md) — no step below may start until this is checked
 - [ ] Bump `version` in `lightningparse-core/pyproject.toml` to `0.4.0`
 - [ ] Update `README.md`'s "What's New" section to accurately describe **both** pieces of this release: page-tree fault tolerance (from earlier work, now verified per Phase 0) and ASCII85Decode support (this document) — don't let one overshadow or get conflated with the other in the changelog wording
 - [ ] Final full verification pass: `cargo clippy -- -D warnings`, `cargo test`, full corpus regression
@@ -89,6 +109,7 @@ Before writing a custom decoder, check whether the problem is already solved.
 - [ ] `git tag v0.4.0 && git push origin v0.4.0`
 - [ ] Watch GitHub Actions — confirm all build jobs (linux x2, windows, macos x2, sdist) pass, then confirm the `release` job publishes successfully via Trusted Publishing
 - [ ] Verify from a clean environment: `pip install lightningparse==0.4.0 --force-reinstall --no-cache-dir`, confirm `pip show lightningparse` reports `0.4.0`, and re-run a real parse to confirm the ASCII85 fix works from the actual published wheel, not just the local dev build
+  - ⚠️ **This check is insufficient on its own** — pinning `==0.4.0` forces the version, so it passes even while a plain `pip install lightningparse` still resolves to `3.1.0`. Also run an **unpinned** `pip install lightningparse` in a clean environment and assert the resolved version is the intended one. See [`VERSIONING_ISSUE.md`](./VERSIONING_ISSUE.md).
 
 ---
 
