@@ -60,13 +60,23 @@ fn extract_page(
 ) -> Result<(Page, Vec<String>), ParseError> {
     let mut warnings = Vec::new();
 
-    // Check for unsupported filters that cause silent failure in lopdf 0.33
+    // Check for filters that lopdf cannot decode — those pages must fall back to OCR.
+    // As of lopdf 0.44, supported filters are: FlateDecode, LZWDecode,
+    // ASCII85Decode, ASCIIHexDecode, RunLengthDecode.
     let content_streams = doc.get_page_contents(page_id);
     for stream_id in content_streams {
         if let Ok(stream) = doc.get_object(stream_id).and_then(|o| o.as_stream()) {
             if let Ok(filters) = stream.filters() {
                 for filter in filters {
-                    if filter != b"FlateDecode" && filter != b"LZWDecode" {
+                    let supported = matches!(
+                        filter,
+                        b"FlateDecode"
+                            | b"LZWDecode"
+                            | b"ASCII85Decode"
+                            | b"ASCIIHexDecode"
+                            | b"RunLengthDecode"
+                    );
+                    if !supported {
                         let filter_str = String::from_utf8_lossy(filter);
                         let msg = format!("Page {page_num}: content stream uses unsupported filter '{filter_str}', falling back to OCR");
                         eprintln!("Warning: {}", msg);
@@ -79,16 +89,6 @@ fn extract_page(
 
     // Get the content stream bytes (lopdf decompresses + concatenates arrays).
     let content_bytes = doc.get_page_content(page_id);
-    if content_bytes.is_empty() {
-        return Ok((
-            Page {
-                page_num,
-                blocks: vec![],
-            },
-            warnings,
-        ));
-    }
-
     if content_bytes.is_empty() {
         return Ok((
             Page {

@@ -244,3 +244,60 @@ fn test_code_block_detection() {
     // "def fibonacci(n):" -> code
     assert_eq!(blocks[3].block_role(), Some("code"));
 }
+
+// ── ASCII85Decode: end-to-end digital extraction ────────────────
+
+#[test]
+fn test_ascii85_digital_extraction() {
+    let path = read_corpus_file("ascii85_test.pdf");
+    let result = lightningparse::parse_pdf_to_result(&path)
+        .expect("ascii85_test.pdf should parse successfully");
+
+    assert_eq!(result.metadata.page_count, 1);
+    assert_eq!(result.pages.len(), 1);
+
+    // The critical assertion: tier must be "digital", not "scanned"
+    assert_eq!(
+        result.metadata.tier, "digital",
+        "ASCII85-encoded PDF should be routed as Tier 1 digital, not scanned/OCR"
+    );
+
+    // Warnings must be empty — ASCII85Decode is a supported filter
+    assert!(
+        result.metadata.warnings.is_empty(),
+        "ASCII85Decode should not trigger unsupported-filter warnings, got: {:?}",
+        result.metadata.warnings
+    );
+
+    // Should have extracted actual text blocks
+    let total_blocks: usize = result.pages.iter().map(|p| p.blocks.len()).sum();
+    assert!(
+        total_blocks > 0,
+        "Should extract text blocks from ASCII85-encoded content"
+    );
+
+    // Every block should report source="digital"
+    for page in &result.pages {
+        for block in &page.blocks {
+            assert_eq!(
+                block.source(),
+                "digital",
+                "ASCII85 content blocks should be digital, not scanned"
+            );
+        }
+    }
+
+    // Spot-check: the encoded content should contain "Hello ASCII85"
+    let all_text: String = result
+        .pages
+        .iter()
+        .flat_map(|p| p.blocks.iter())
+        .map(|b| b.text())
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        all_text.contains("Hello") || all_text.contains("ASCII85"),
+        "Extracted text should contain expected content from ASCII85 stream, got: {:?}",
+        all_text
+    );
+}
