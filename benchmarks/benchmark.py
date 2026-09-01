@@ -24,8 +24,20 @@ CORPUS_DIR = Path(__file__).parent / "corpus"
 BENCHMARKS_MD = Path(__file__).parent / "BENCHMARKS.md"
 
 # Number of warm-up + timed iterations per file
-WARMUP_RUNS = 1
-TIMED_RUNS = 5
+# Raised from 1/5 after measuring the sampling stability of the old settings
+# (benchmarks/diagnostic/bench_stability.py, findings in
+# FINDINGS-BENCHMARK-DISCREPANCY.md).
+#
+# WARMUP_RUNS = 1 left the timed window inside the warm-up ramp: LightningParse's
+# first five runs measured 87% slower than subsequent ones on the IEEE fixture
+# and 43% slower on the resume, so published figures understated our own
+# performance by roughly 30%. pdfplumber ramps too; pypdf does not.
+#
+# TIMED_RUNS = 5 gave a reported median with a 27-90% 95% band depending on
+# fixture and library — wide enough that consecutive runs on identical code and
+# hardware differed by >60%, which is what prompted this investigation.
+WARMUP_RUNS = 10
+TIMED_RUNS = 25
 
 
 # ── LightningParse runner ──────────────────────────────────────
