@@ -26,8 +26,10 @@ pub fn detect_headers_footers(mut pages: Vec<Page>) -> Result<Vec<Page>, ParseEr
     let total_pages = pages.len();
     let threshold = (total_pages as f64 * 0.7).ceil() as usize; // 70% of pages
 
-    // 1. Find global max_y across all pages to define bands.
-    // (Assuming standard PDF coordinates where y=0 is bottom, so max_y is top of page)
+    // 1. Fallback reference only. Bands are placed against each page's own
+    //    geometry (see `band_cuts`); this document-wide content extent is used
+    //    solely when a page carries no usable /CropBox or /MediaBox, so PDFs
+    //    without geometry behave exactly as they did before.
     let mut global_max_y = 0.0;
     for page in &pages {
         for block in &page.blocks {
@@ -41,12 +43,23 @@ pub fn detect_headers_footers(mut pages: Vec<Page>) -> Result<Vec<Page>, ParseEr
         return Ok(pages); // No blocks or degenerate bboxes
     }
 
-    // Define top and bottom margin bands (e.g., 10% of page height).
-    // In PDF coords (y=0 at bottom):
-    // Top band: y > max_y * 0.90
-    // Bottom band: y < max_y * 0.10
-    let top_band_threshold = global_max_y * 0.90;
-    let bottom_band_threshold = global_max_y * 0.10;
+    // Margin bands, in PDF coords (y=0 at bottom): top band is y > h * 0.90,
+    // bottom band is y < h * 0.10.
+    //
+    // `h` is the page's REAL height, not its content extent. Deriving it from
+    // content placed the band well below the true margin — content never
+    // reaches the physical top of the sheet — so the band reached down into
+    // body text and tagged titles, author lines and chapter headings as page
+    // furniture, which the chunker then dropped. Using per-page geometry also
+    // removes the cross-page coupling of a single document-wide `global_max_y`,
+    // where one unusually tall page shifted the band on every other page.
+    let band_cuts = |page: &Page| -> (f64, f64) {
+        let height = page
+            .page_height
+            .filter(|h| h.is_finite() && *h > 0.0)
+            .unwrap_or(global_max_y);
+        (height * 0.90, height * 0.10)
+    };
 
     // 2. Collect block texts by band and page.
     // Key: Normalized text (digits removed, lowercase).
@@ -55,6 +68,7 @@ pub fn detect_headers_footers(mut pages: Vec<Page>) -> Result<Vec<Page>, ParseEr
     let mut bottom_band_clusters: HashMap<String, HashSet<u32>> = HashMap::new();
 
     for page in &pages {
+        let (top_band_threshold, bottom_band_threshold) = band_cuts(page);
         for block in &page.blocks {
             // Check top band
             if block.bbox()[1] > top_band_threshold {
@@ -94,15 +108,18 @@ pub fn detect_headers_footers(mut pages: Vec<Page>) -> Result<Vec<Page>, ParseEr
 
     // 4. Tag the blocks.
     for page in &mut pages {
-        // We need max_y of the page for single-page heuristics.
+        let (top_band_threshold, bottom_band_threshold) = band_cuts(page);
+
+        // Content extent is still the reference for the page-1 footnote
+        // heuristic below. That branch is deliberately left untouched by this
+        // change; re-basing it on page geometry would alter footnote detection,
+        // which is a separate question from the content-loss defect being fixed.
         let mut page_max_y = 0.0;
         for block in &page.blocks {
             if block.bbox()[3] > page_max_y {
                 page_max_y = block.bbox()[3];
             }
         }
-        let page_top_10 = page_max_y * 0.90;
-        let page_bottom_10 = page_max_y * 0.10;
         let page_bottom_30 = page_max_y * 0.30;
 
         for block in &mut page.blocks {
@@ -120,31 +137,30 @@ pub fn detect_headers_footers(mut pages: Vec<Page>) -> Result<Vec<Page>, ParseEr
                 continue;
             }
 
-            // Single-page fallbacks (only apply to the first page to avoid mistagging top-of-page figures/tables on subsequent pages)
-            if page.page_num == 1 {
-                // Check footnote first (up to bottom 30%)
-                if block.bbox()[1] < page_bottom_30
-                    && (block.text().starts_with('*')
-                        || block.text().starts_with('\u{2217}')
-                        || block.text().starts_with('†')
-                        || block.text().starts_with('‡')
-                        || block.text().starts_with('§'))
-                {
-                    block.set_section_id("footnote".into());
-                    continue;
-                }
-
-                // Very top blocks lacking cross-page match
-                if block.bbox()[1] > page_top_10 {
-                    block.set_section_id("header".into());
-                    continue;
-                }
-
-                // Very bottom blocks lacking cross-page match
-                if block.bbox()[3] < page_bottom_10 {
-                    block.set_section_id("footer".into());
-                    continue;
-                }
+            // Page-1-only footnote heuristic.
+            //
+            // This fallback previously also tagged any very-top block as
+            // `header` and any very-bottom block as `footer` on page 1, on
+            // position alone with no cross-page corroboration. That is what
+            // deleted title pages, author lines and memo To:/From: fields —
+            // page 1 was classified by a different rule from every other page,
+            // and everything it tagged was dropped by the chunker. Those two
+            // branches are removed; page 1 now follows the same cross-page
+            // rules as the rest of the document.
+            //
+            // The footnote branch is kept: this is the ONLY site in the
+            // codebase that ever assigns `section_id: "footnote"`, so removing
+            // it wholesale would make a documented schema value dead.
+            if page.page_num == 1
+                && block.bbox()[1] < page_bottom_30
+                && (block.text().starts_with('*')
+                    || block.text().starts_with('\u{2217}')
+                    || block.text().starts_with('†')
+                    || block.text().starts_with('‡')
+                    || block.text().starts_with('§'))
+            {
+                block.set_section_id("footnote".into());
+                continue;
             }
         }
     }

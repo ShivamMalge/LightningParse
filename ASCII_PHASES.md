@@ -201,7 +201,7 @@ listing requires spending a new version number.
 - [x] Bump `pyproject.toml`, `Cargo.toml`, and `Cargo.lock` to `0.4.1` in lockstep
 - [x] Retitle the "What's New" section to `v0.4.1` in both `README.md` and `lightningparse-core/README.md` — `v0.4.1` is the first release whose PyPI listing actually describes this work, so the feature list belongs under it
 - [x] Commit, then `git tag v0.4.1 && git push origin v0.4.1`
-- [ ] Confirm the description updated: `curl -s https://pypi.org/pypi/lightningparse/json | python -c "import json,sys; print(json.load(sys.stdin)['info']['description'][:200])"`
+- [x] Confirm the description updated — **verified 2026-08-30 against the live PyPI JSON API.** `info.version` is now `0.4.1`, and `info.description` is 10,926 characters beginning with the `lightningparse-core/README.md` HTML comment ("This file IS the PyPI project description..."), i.e. the canonical page, not the stale one. The `v0.4.0` listing keeps its wrong description permanently — that is inherent to PyPI's immutable descriptions and is why the version number was spent.
 
 **Release-order rule going forward:** every content commit — README included —
 must be merged *before* the tag is created. The tag is what CI builds from, so

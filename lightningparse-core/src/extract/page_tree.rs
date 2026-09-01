@@ -66,6 +66,99 @@ pub fn get_pages_tolerant(doc: &Document) -> Result<BTreeMap<u32, ObjectId>, Par
     Ok(pages)
 }
 
+/// Effective page dimensions in PDF user-space units, after box selection and
+/// rotation normalisation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PageGeometry {
+    pub width: f64,
+    pub height: f64,
+}
+
+/// Resolve a page's *visible* dimensions.
+///
+/// Used by `cleanup::detect_headers_footers` to place margin bands against real
+/// page geometry rather than against content extent. Deriving a "top 10%" band
+/// from the tallest block on the page places it well below the true margin —
+/// content essentially never reaches the physical top of the sheet — so the band
+/// reaches down into body text and tags it as page furniture, which the
+/// downstream chunker then drops.
+///
+/// - Prefers `/CropBox` (what a viewer displays) over `/MediaBox` (the full
+///   sheet, which may include printer bleed).
+/// - Both are *inheritable* page-tree attributes, so the `/Parent` chain is
+///   walked when the leaf page omits them.
+/// - `/Rotate` of 90 or 270 swaps the effective axes.
+/// - Returns `None` when nothing usable is found, so callers fall back to the
+///   previous content-extent behaviour and PDFs that work today cannot regress.
+pub fn resolve_page_geometry(doc: &Document, page_id: ObjectId) -> Option<PageGeometry> {
+    let rect = inherited_rect(doc, page_id, b"CropBox")
+        .or_else(|| inherited_rect(doc, page_id, b"MediaBox"))?;
+
+    let width = (rect[2] - rect[0]).abs();
+    let height = (rect[3] - rect[1]).abs();
+    if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+
+    let rotate = inherited_int(doc, page_id, b"Rotate").unwrap_or(0).rem_euclid(360);
+    if rotate == 90 || rotate == 270 {
+        Some(PageGeometry {
+            width: height,
+            height: width,
+        })
+    } else {
+        Some(PageGeometry { width, height })
+    }
+}
+
+/// Look up an inheritable attribute, walking `/Parent` when the page omits it.
+///
+/// Cycle-safe by the same reasoning as `walk_tree`: a malformed page tree can
+/// contain loops, and a `/Parent` chain is just as capable of forming one as a
+/// `/Kids` chain.
+fn inherited<'a>(doc: &'a Document, page_id: ObjectId, key: &[u8]) -> Option<&'a Object> {
+    let mut current = page_id;
+    let mut visited = HashSet::new();
+
+    loop {
+        if !visited.insert(current) {
+            eprintln!(
+                "lightningparse: /Parent cycle detected at object {:?} while resolving {}",
+                current,
+                String::from_utf8_lossy(key)
+            );
+            return None;
+        }
+
+        let dict = doc.get_dictionary(current).ok()?;
+        if let Ok(obj) = dict.get(key) {
+            return doc.dereference(obj).ok().map(|(_, resolved)| resolved);
+        }
+
+        current = dict.get(b"Parent").and_then(Object::as_reference).ok()?;
+    }
+}
+
+/// Resolve an inheritable rectangle (`[x0 y0 x1 y1]`), dereferencing any
+/// indirect elements — the array itself and each number may be a reference.
+fn inherited_rect(doc: &Document, page_id: ObjectId, key: &[u8]) -> Option<[f64; 4]> {
+    let array = inherited(doc, page_id, key)?.as_array().ok()?;
+    if array.len() != 4 {
+        return None;
+    }
+
+    let mut out = [0.0f64; 4];
+    for (i, item) in array.iter().enumerate() {
+        let resolved = doc.dereference(item).ok().map(|(_, o)| o)?;
+        out[i] = f64::from(resolved.as_float().ok()?);
+    }
+    Some(out)
+}
+
+fn inherited_int(doc: &Document, page_id: ObjectId, key: &[u8]) -> Option<i64> {
+    inherited(doc, page_id, key)?.as_i64().ok()
+}
+
 fn walk_tree(
     doc: &Document,
     node_id: ObjectId,
@@ -494,5 +587,193 @@ mod tests {
         let tolerant_pages = get_pages_tolerant(&doc).unwrap();
         assert_eq!(tolerant_pages.len(), 1);
         assert_eq!(tolerant_pages[&1], page_id);
+    }
+}
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+    use lopdf::{Dictionary as LoDictionary, Object};
+
+    /// Page with an explicit MediaBox.
+    #[test]
+    fn test_explicit_mediabox() {
+        let mut doc = Document::with_version("1.5");
+        let mut page = LoDictionary::new();
+        page.set(
+            "MediaBox",
+            Object::Array(vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(612),
+                Object::Integer(792),
+            ]),
+        );
+        let id = doc.add_object(page);
+        let g = resolve_page_geometry(&doc, id).expect("geometry");
+        assert_eq!(g.width, 612.0);
+        assert_eq!(g.height, 792.0);
+    }
+
+    /// CropBox wins over MediaBox: it is what a viewer actually displays.
+    #[test]
+    fn test_cropbox_preferred_over_mediabox() {
+        let mut doc = Document::with_version("1.5");
+        let mut page = LoDictionary::new();
+        page.set(
+            "MediaBox",
+            Object::Array(vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(700),
+                Object::Integer(900),
+            ]),
+        );
+        page.set(
+            "CropBox",
+            Object::Array(vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(612),
+                Object::Integer(792),
+            ]),
+        );
+        let id = doc.add_object(page);
+        let g = resolve_page_geometry(&doc, id).expect("geometry");
+        assert_eq!(g.width, 612.0);
+        assert_eq!(g.height, 792.0);
+    }
+
+    /// MediaBox is inheritable: a leaf page may omit it entirely.
+    #[test]
+    fn test_inherited_mediabox_from_parent() {
+        let mut doc = Document::with_version("1.5");
+        let page_id = doc.add_object(LoDictionary::new());
+
+        let mut parent = LoDictionary::new();
+        parent.set(
+            "MediaBox",
+            Object::Array(vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(595),
+                Object::Integer(842),
+            ]),
+        );
+        parent.set("Kids", Object::Array(vec![Object::Reference(page_id)]));
+        let parent_id = doc.add_object(parent);
+
+        // Link the child back up so the /Parent walk can find the attribute.
+        if let Ok(d) = doc.get_dictionary_mut(page_id) {
+            d.set("Parent", Object::Reference(parent_id));
+        }
+
+        let g = resolve_page_geometry(&doc, page_id).expect("inherited geometry");
+        assert_eq!(g.width, 595.0);
+        assert_eq!(g.height, 842.0);
+    }
+
+    /// A cyclic /Parent chain must terminate rather than recurse forever.
+    #[test]
+    fn test_cyclic_parent_chain_terminates() {
+        let mut doc = Document::with_version("1.5");
+        let a_id = doc.add_object(LoDictionary::new());
+        let b_id = doc.add_object(LoDictionary::new());
+        if let Ok(d) = doc.get_dictionary_mut(a_id) {
+            d.set("Parent", Object::Reference(b_id));
+        }
+        if let Ok(d) = doc.get_dictionary_mut(b_id) {
+            d.set("Parent", Object::Reference(a_id));
+        }
+        // No geometry anywhere and a loop: must return None, not hang.
+        assert!(resolve_page_geometry(&doc, a_id).is_none());
+    }
+
+    /// Missing geometry yields None so callers fall back to old behaviour.
+    #[test]
+    fn test_missing_geometry_returns_none() {
+        let mut doc = Document::with_version("1.5");
+        let id = doc.add_object(LoDictionary::new());
+        assert!(resolve_page_geometry(&doc, id).is_none());
+    }
+
+    /// Degenerate boxes are rejected rather than producing a zero-height band.
+    #[test]
+    fn test_degenerate_box_returns_none() {
+        let mut doc = Document::with_version("1.5");
+        let mut page = LoDictionary::new();
+        page.set(
+            "MediaBox",
+            Object::Array(vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(0),
+            ]),
+        );
+        let id = doc.add_object(page);
+        assert!(resolve_page_geometry(&doc, id).is_none());
+    }
+
+    /// /Rotate 90 swaps the effective axes.
+    #[test]
+    fn test_rotate_90_swaps_axes() {
+        let mut doc = Document::with_version("1.5");
+        let mut page = LoDictionary::new();
+        page.set(
+            "MediaBox",
+            Object::Array(vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(612),
+                Object::Integer(792),
+            ]),
+        );
+        page.set("Rotate", Object::Integer(90));
+        let id = doc.add_object(page);
+        let g = resolve_page_geometry(&doc, id).expect("geometry");
+        assert_eq!(g.width, 792.0);
+        assert_eq!(g.height, 612.0);
+    }
+
+    /// Negative rotations normalise (rem_euclid), e.g. -90 behaves as 270.
+    #[test]
+    fn test_negative_rotate_normalises() {
+        let mut doc = Document::with_version("1.5");
+        let mut page = LoDictionary::new();
+        page.set(
+            "MediaBox",
+            Object::Array(vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(612),
+                Object::Integer(792),
+            ]),
+        );
+        page.set("Rotate", Object::Integer(-90));
+        let id = doc.add_object(page);
+        let g = resolve_page_geometry(&doc, id).expect("geometry");
+        assert_eq!(g.width, 792.0);
+        assert_eq!(g.height, 612.0);
+    }
+
+    /// Real-valued and offset boxes are handled, not just integer origins.
+    #[test]
+    fn test_offset_and_real_valued_box() {
+        let mut doc = Document::with_version("1.5");
+        let mut page = LoDictionary::new();
+        page.set(
+            "MediaBox",
+            Object::Array(vec![
+                Object::Real(10.5),
+                Object::Real(20.5),
+                Object::Real(622.5),
+                Object::Real(812.5),
+            ]),
+        );
+        let id = doc.add_object(page);
+        let g = resolve_page_geometry(&doc, id).expect("geometry");
+        assert_eq!(g.width, 612.0);
+        assert_eq!(g.height, 792.0);
     }
 }

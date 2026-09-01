@@ -14,6 +14,14 @@ pub struct ParseResult {
 pub struct Page {
     pub page_num: u32,
     pub blocks: Vec<Block>,
+    /// Effective page width in PDF units (CropBox preferred, else MediaBox,
+    /// inherited if absent, axes swapped for /Rotate 90|270).
+    /// `None` when the document carries no usable page geometry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_width: Option<f64>,
+    /// Effective page height. See [`Page::page_width`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_height: Option<f64>,
 }
 
 /// A style span within a text block.

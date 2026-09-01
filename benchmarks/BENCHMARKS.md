@@ -4,55 +4,95 @@
 
 **Runs per file:** 5 (+ 1 warm-up)
 
+**Generated:** 2026-09-01 · lightningparse 0.4.1 · commit `7af67d4` · ⚠️ **5 uncommitted change(s) in `lightningparse-core/src`** — these numbers are NOT reproducible from that commit
+
+**What is timed:** wall time of the `lightningparse.parse_pdf()` call — Rust extraction *plus* the cleanup passes (tables, reading order, header/footer, headings) *plus* JSON serialization. It does **not** include `json.loads()` on the Python side. Note this is a different quantity from `metadata.parse_time_ms`, which stops at the end of extraction and excludes cleanup and serialization — expect the timed figure to exceed it.
+
 ## Tier 1 (Digital-Native)
 
 ### Shivam_FullStack.pdf
 
 | Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
 |---------|------:|------------:|----------:|---------:|---------:|-----------:|
-| lightningparse | 1 | 6.82 | 6.80 | 6.41 | 7.05 | 0.24 |
-| pypdf | 1 | 82.14 | 86.22 | 80.67 | 100.91 | 8.52 |
-| pdfplumber | 1 | 208.42 | 210.47 | 203.62 | 225.79 | 8.82 |
+| lightningparse | 1 | 13.48 | 13.47 | 13.20 | 13.72 | 0.20 |
+| pypdf | 1 | 171.09 | 200.50 | 164.85 | 328.49 | 71.61 |
+| pdfplumber | 1 | 553.08 | 539.40 | 408.67 | 632.46 | 81.03 |
 
 **Speedup:**
-- vs pypdf: **12.0×** faster
-- vs pdfplumber: **30.6×** faster
+- vs pypdf: **12.7×** faster
+- vs pdfplumber: **41.0×** faster
 
 ### arxiv_twocolumn.pdf
 
 | Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
 |---------|------:|------------:|----------:|---------:|---------:|-----------:|
-| lightningparse | 15 | 41.12 | 40.86 | 38.70 | 42.17 | 1.36 |
-| pypdf | 15 | 951.92 | 946.61 | 912.27 | 964.99 | 20.13 |
-| pdfplumber | 15 | 2579.90 | 2619.75 | 2563.90 | 2716.40 | 68.62 |
+| lightningparse | 15 | 85.16 | 86.97 | 83.71 | 96.73 | 5.51 |
+| pypdf | 15 | 4191.24 | 4176.89 | 4044.51 | 4242.20 | 81.09 |
+| pdfplumber | 15 | 6657.49 | 6692.60 | 6577.58 | 6915.42 | 130.32 |
 
 **Speedup:**
-- vs pypdf: **23.1×** faster
-- vs pdfplumber: **62.7×** faster
+- vs pypdf: **49.2×** faster
+- vs pdfplumber: **78.2×** faster
+
+### ascii85_test.pdf
+
+| Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
+|---------|------:|------------:|----------:|---------:|---------:|-----------:|
+| lightningparse | 1 | 0.51 | 0.51 | 0.46 | 0.56 | 0.04 |
+| pypdf | 1 | 2.68 | 2.72 | 1.88 | 4.07 | 0.82 |
+| pdfplumber | 1 | 3.38 | 3.41 | 3.06 | 3.87 | 0.31 |
+
+**Speedup:**
+- vs pypdf: **5.3×** faster
+- vs pdfplumber: **6.6×** faster
+
+### bold_label_value.pdf
+
+| Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
+|---------|------:|------------:|----------:|---------:|---------:|-----------:|
+| lightningparse | 1 | 0.90 | 0.94 | 0.85 | 1.18 | 0.14 |
+| pypdf | 1 | 39.18 | 39.89 | 34.48 | 47.96 | 4.96 |
+| pdfplumber | 1 | 453.24 | 481.05 | 357.50 | 733.52 | 148.87 |
+
+**Speedup:**
+- vs pypdf: **43.5×** faster
+- vs pdfplumber: **503.6×** faster
 
 ### digital_word_export.pdf
 
 | Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
 |---------|------:|------------:|----------:|---------:|---------:|-----------:|
-| lightningparse | 2 | 0.42 | 0.44 | 0.40 | 0.50 | 0.04 |
-| pypdf | 2 | 2.53 | 2.57 | 2.49 | 2.68 | 0.09 |
-| pdfplumber | 2 | 20.44 | 20.66 | 20.33 | 21.13 | 0.38 |
+| lightningparse | 2 | 0.80 | 0.82 | 0.71 | 1.04 | 0.13 |
+| pypdf | 2 | 7.10 | 7.03 | 6.75 | 7.20 | 0.18 |
+| pdfplumber | 2 | 38.89 | 39.98 | 37.26 | 44.26 | 2.68 |
 
 **Speedup:**
-- vs pypdf: **6.0×** faster
-- vs pdfplumber: **48.7×** faster
+- vs pypdf: **8.9×** faster
+- vs pdfplumber: **48.6×** faster
 
 ### ieee_template_placeholder.pdf
 
 | Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
 |---------|------:|------------:|----------:|---------:|---------:|-----------:|
-| lightningparse | 8 | 0.61 | 0.61 | 0.59 | 0.62 | 0.01 |
-| pypdf | 8 | 7.89 | 8.06 | 7.85 | 8.68 | 0.35 |
-| pdfplumber | 8 | 56.82 | 98.68 | 53.99 | 268.20 | 94.78 |
+| lightningparse | 8 | 1.61 | 1.67 | 1.39 | 2.21 | 0.34 |
+| pypdf | 8 | 21.71 | 21.98 | 21.50 | 22.56 | 0.52 |
+| pdfplumber | 8 | 116.27 | 120.44 | 103.80 | 156.97 | 21.64 |
 
 **Speedup:**
-- vs pypdf: **12.9×** faster
-- vs pdfplumber: **93.1×** faster
+- vs pypdf: **13.5×** faster
+- vs pdfplumber: **72.2×** faster
+
+### multistream_test.pdf
+
+| Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
+|---------|------:|------------:|----------:|---------:|---------:|-----------:|
+| lightningparse | 1 | 0.46 | 0.48 | 0.45 | 0.54 | 0.04 |
+| pypdf | 1 | 1.91 | 2.18 | 1.84 | 3.03 | 0.50 |
+| pdfplumber | 1 | 4.62 | 4.58 | 4.33 | 4.73 | 0.15 |
+
+**Speedup:**
+- vs pypdf: **4.2×** faster
+- vs pdfplumber: **10.0×** faster
 
 ## Tier 2 (OCR Scans)
 
@@ -62,19 +102,19 @@
 
 | Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
 |---------|------:|------------:|----------:|---------:|---------:|-----------:|
-| lightningparse | 1 | 24387.18 | 24507.30 | 23072.65 | 26257.68 | 1214.76 |
+| lightningparse | 1 | 48837.81 | 49473.05 | 48162.04 | 50890.66 | 1245.03 |
 
 ### phone_photo_minutes.pdf
 
 | Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
 |---------|------:|------------:|----------:|---------:|---------:|-----------:|
-| lightningparse | 1 | 17501.83 | 17282.42 | 16458.82 | 17666.29 | 481.92 |
+| lightningparse | 1 | 33299.52 | 32793.37 | 31071.24 | 33594.39 | 1025.08 |
 
 ### scan-to-pdf-1785075273618.pdf
 
 | Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
 |---------|------:|------------:|----------:|---------:|---------:|-----------:|
-| lightningparse | 1 | 1335.26 | 1343.27 | 1325.69 | 1364.82 | 18.16 |
+| lightningparse | 1 | 2425.09 | 2449.27 | 2419.87 | 2519.40 | 42.49 |
 
 ## Mixed Documents
 
@@ -82,7 +122,7 @@
 
 | Library | Pages | Median (ms) | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
 |---------|------:|------------:|----------:|---------:|---------:|-----------:|
-| lightningparse | 9 | 1318.77 | 1317.06 | 1294.60 | 1334.23 | 14.23 |
+| lightningparse | 9 | 2531.83 | 2503.99 | 2430.00 | 2562.53 | 65.97 |
 
 ## Concurrent Load Test
 

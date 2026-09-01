@@ -152,6 +152,8 @@ fn test_heading_detection_false_positives() {
     let pages = vec![Page {
         page_num: 1,
         blocks,
+        page_width: None,
+        page_height: None,
     }];
 
     let processed = lightningparse::cleanup::heading_detect::detect_headings(pages).unwrap();
@@ -264,5 +266,159 @@ fn test_reading_order_arxiv_twocolumn() {
         // causing dozens of jumps per page.
         // In a correct reading order, we should see very few column jumps per page (typically <= 5, depending on figures/titles breaking swaths).
         assert!(large_right_jumps <= 10, "Reading order appears broken on page {}: too many right jumps ({}) - looks like it's zig-zagging between columns", page.page_num, large_right_jumps);
+    }
+}
+
+// ─── Regression tests for the G4/G5 margin-band fix ─────────────────
+//
+// See PHASES-MARGIN-BANDS.md and FINDINGS-CONTENT-EXTENT-BANDS.md.
+// Margin bands were derived from CONTENT extent rather than page geometry, and
+// a page-1-only fallback tagged header/footer on position alone. Between them
+// they tagged real body content as page furniture, which the chunker drops.
+
+/// The page-1 fallback's footnote branch must survive.
+///
+/// `cleanup/mod.rs` is the only site in the codebase that ever assigns
+/// `section_id: "footnote"`. Removing the whole fallback would have made a
+/// documented schema value dead, so only its header/footer branches were cut.
+/// This test is the guard against a future cleanup deleting the last path.
+#[test]
+fn test_page1_footnote_branch_survives() {
+    let path = read_corpus_file("arxiv_twocolumn.pdf");
+    let mut result = lightningparse::parse_pdf_to_result(&path).unwrap();
+    result.pages = lightningparse::cleanup::detect_headers_footers(result.pages).unwrap();
+
+    let footnotes: Vec<&str> = result.pages[0]
+        .blocks
+        .iter()
+        .filter(|b| b.section_id() == "footnote")
+        .map(|b| b.text())
+        .collect();
+
+    assert!(
+        !footnotes.is_empty(),
+        "page-1 footnote detection regressed: no footnote blocks found"
+    );
+}
+
+/// Page 1 must no longer be classified by a different rule from every other
+/// page. The paper title and author line are body content and must reach the
+/// chunker, not be tagged as page furniture and dropped.
+#[test]
+fn test_page1_title_and_authors_are_not_furniture() {
+    let path = read_corpus_file("ieee_template_placeholder.pdf");
+    let mut result = lightningparse::parse_pdf_to_result(&path).unwrap();
+    result.pages = lightningparse::cleanup::detect_headers_footers(result.pages).unwrap();
+
+    for block in &result.pages[0].blocks {
+        let text = block.text();
+        if text.contains("LightningParse: Hybrid") || text.contains("Anonymous Authors") {
+            assert_eq!(
+                block.section_id(),
+                "body",
+                "page-1 content was tagged as furniture and would be dropped: {text:?}"
+            );
+        }
+    }
+}
+
+/// Page geometry must be resolved and exposed for a normal document, since the
+/// margin bands now depend on it.
+#[test]
+fn test_page_geometry_is_populated() {
+    let path = read_corpus_file("arxiv_twocolumn.pdf");
+    let result = lightningparse::parse_pdf_to_result(&path).unwrap();
+
+    for page in &result.pages {
+        let h = page.page_height.expect("page_height should be resolved");
+        let w = page.page_width.expect("page_width should be resolved");
+        assert!(h > 0.0 && w > 0.0, "degenerate geometry on page {}", page.page_num);
+        // US Letter, the actual size of this fixture.
+        assert!((h - 792.0).abs() < 1.0, "unexpected page height {h}");
+        assert!((w - 612.0).abs() < 1.0, "unexpected page width {w}");
+    }
+}
+
+/// A block sitting between the old content-extent band and the real page
+/// margin must no longer be swallowed. On this fixture the chapter heading on
+/// p7 sat at y=700, inside a content-derived band starting at 683.1 but outside
+/// a geometry-derived one starting at 712.8.
+#[test]
+fn test_chapter_heading_not_tagged_header() {
+    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    p.pop();
+    p.push("benchmarks");
+    p.push("diagnostic");
+    p.push("fixtures");
+    p.push("f5a_pagelabels.pdf");
+    if !p.exists() {
+        return; // fixture is generated; skip when absent
+    }
+    let path = p.to_str().unwrap().to_string();
+    let mut result = lightningparse::parse_pdf_to_result(&path).unwrap();
+    result.pages = lightningparse::cleanup::detect_headers_footers(result.pages).unwrap();
+
+    let page7 = result.pages.iter().find(|pg| pg.page_num == 7).unwrap();
+    for block in &page7.blocks {
+        if block.text().trim() == "The Human Eye" && block.bbox()[1] < 720.0 {
+            assert_eq!(
+                block.section_id(),
+                "body",
+                "chapter heading inside the abandoned band was still tagged furniture"
+            );
+        }
+    }
+}
+
+/// Cross-page coupling: the old band was a fraction of `global_max_y`, one
+/// document-wide content extent, so a single tall page shifted the margin band
+/// on every other page. Per-page geometry removes that coupling.
+///
+/// On this fixture the tall page's content reaches y=1150, which under the old
+/// rule put the band at 1035 — above every Letter page's entire content, so
+/// nothing on them could be tagged at all.
+#[test]
+fn test_mixed_page_sizes_band_independently() {
+    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    p.pop();
+    p.push("benchmarks");
+    p.push("diagnostic");
+    p.push("fixtures");
+    p.push("mixed_pagesize.pdf");
+    if !p.exists() {
+        return; // generated fixture; skip when absent
+    }
+    let path = p.to_str().unwrap().to_string();
+    let mut result = lightningparse::parse_pdf_to_result(&path).unwrap();
+
+    // Each page must carry its own geometry, not a shared document-wide value.
+    let heights: Vec<f64> = result
+        .pages
+        .iter()
+        .map(|pg| pg.page_height.expect("geometry resolved"))
+        .collect();
+    assert!(
+        heights.iter().any(|h| (h - 1200.0).abs() < 1.0),
+        "tall page height not resolved: {heights:?}"
+    );
+    assert!(
+        heights.iter().any(|h| (h - 792.0).abs() < 1.0),
+        "letter page height not resolved: {heights:?}"
+    );
+
+    result.pages = lightningparse::cleanup::detect_headers_footers(result.pages).unwrap();
+
+    // Body content on every page must survive regardless of the tall page.
+    for page in &result.pages {
+        for block in &page.blocks {
+            if block.text().contains("must never be tagged") {
+                assert_eq!(
+                    block.section_id(),
+                    "body",
+                    "body text on page {} was tagged as furniture",
+                    page.page_num
+                );
+            }
+        }
     }
 }

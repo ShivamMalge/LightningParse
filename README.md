@@ -4,6 +4,14 @@ Fast, accurate PDF parsing for RAG pipelines — a Rust extraction core (via PyO
 
 > **Status:** published on PyPI (`pip install lightningparse`). Core pipeline complete — Rust extraction, cleanup, OCR fallback, semantic block typing, chunking, retrieval, and generation are all implemented and benchmarked end-to-end. See [`PHASES.md`](./PHASES.md) for the original build roadmap and [`BENCHMARKS.md`](./benchmarks/BENCHMARKS.md) for full results.
 
+## What's New in v0.5.0
+
+- **Fixed silent content loss in header/footer detection.** Margin bands were computed as a fraction of *content extent* (the tallest block seen) rather than the page's real height. Because content never reaches the physical top of a sheet, the band sat below the true margin and reached down into body text — and anything tagged as page furniture is dropped before chunking. Measured across 7 documents, **19 blocks of genuine content were being deleted**, including a memo's `To:`/`From:` fields, a paper's title and author line, and the chapter titles of two textbook chapters. Bands are now derived from real page geometry.
+- **Removed the page-1-only header/footer fallback.** Page 1 was classified by a different rule from every other page — tagging any very-top or very-bottom block on position alone, with no cross-page corroboration. It caused 8 of the 19 deletions. Its *footnote* branch is retained, as it is the only code path that assigns `section_id: "footnote"`.
+- **Page geometry is now exposed in the output schema:** each page carries optional `page_width` / `page_height`, resolved from `/CropBox` (preferred) or `/MediaBox`, inherited through the page tree via a cycle-safe `/Parent` walk, with axes swapped for `/Rotate 90|270`. Documents with no usable geometry fall back to the previous behaviour, so nothing that worked before can regress.
+
+**Behaviour change to be aware of:** fewer blocks are now tagged as page furniture, so *more* content reaches downstream consumers. If you relied on aggressive header stripping, you will see more furniture text than before. Nothing that was previously body content changes classification — the change is strictly one-directional (verified: 19 blocks freed, **0** newly tagged).
+
 ## What's New in v0.4.1
 
 Two independent pieces of work ship in this release.
@@ -40,13 +48,17 @@ Contributor/agent instructions: [`AGENTS.md`](./AGENTS.md)
 
 ## Benchmarks
 
-LightningParse is **6.0×–93.1× faster** than pypdf/pdfplumber on digital-native (Tier 1) PDFs, with the gap widening on longer documents. Some representative results:
+LightningParse is **12.7×–49.2× faster than pypdf** and **41.0×–78.2× faster than pdfplumber** on the representative digital-native (Tier 1) documents below, with the gap widening on longer documents:
 
 | Document | Pages | LightningParse (median) | pypdf | pdfplumber |
 |---|---:|---:|---:|---:|
-| Multi-page IEEE paper (`ieee_template_placeholder.pdf`) | 8 | 0.61 ms | 7.89 ms (12.9× slower) | 56.82 ms (93.1× slower) |
-| Two-column academic paper (`arxiv_twocolumn.pdf`) | 15 | 41.12 ms | 951.92 ms (23.1× slower) | 2579.90 ms (62.7× slower) |
-| Single-page resume (`Shivam_FullStack.pdf`) | 1 | 6.82 ms | 82.14 ms (12.0× slower) | 208.42 ms (30.6× slower) |
+| Multi-page IEEE paper (`ieee_template_placeholder.pdf`) | 8 | 1.61 ms | 21.71 ms (13.5× slower) | 116.27 ms (72.2× slower) |
+| Two-column academic paper (`arxiv_twocolumn.pdf`) | 15 | 85.16 ms | 4191.24 ms (49.2× slower) | 6657.49 ms (78.2× slower) |
+| Single-page resume (`Shivam_FullStack.pdf`) | 1 | 13.48 ms | 171.09 ms (12.7× slower) | 553.08 ms (41.0× slower) |
+
+> **Absolute milliseconds are machine-dependent** and will vary with hardware, thermal state and background load. The portable claim is the **speedup ratio** — the baselines are timed on the same machine in the same run, so hardware cancels out. This session's own investigation demonstrated it: these absolute figures moved ~2x from the previous published set while pypdf and pdfplumber (code LightningParse does not touch) moved 2.4-3.5x, i.e. the shift was hardware, not the codebase. See [methodology](./benchmarks/BENCHMARKS.md).
+
+Trivial single-page synthetic fixtures in the corpus span wider in both directions (4.2×–503.6×), because at that size the ratio is dominated by each library's fixed overhead rather than by extraction work. They are not quoted as headline figures.
 
 OCR (Tier 2) and mixed-document handling are also supported, benchmarked separately from Tier 1 — pypdf and pdfplumber can't perform OCR, so comparing their near-instant-but-empty results against LightningParse's actual OCR time would be misleading rather than informative. See `BENCHMARKS.md` for those numbers on their own terms.
 
@@ -63,6 +75,7 @@ Results are published in `benchmarks/BENCHMARKS.md` — generated, not hand-writ
 
 ## Known Limitations
 
+- **Page furniture is under-removed on long documents:** header/footer detection requires a repeated block to appear on ≥70% of pages. Running heads usually change per chapter, so on a long book nothing clusters that widely and **no furniture is removed at all** — measured on a 1475-page textbook whose site-wide footer appears on 734 pages and is still not stripped. Separately, a bare page number normalises to an empty string during clustering and can never be tagged. Both mean folios and running heads can flow into `body` text and into chunks.
 - **CID/Type0 composite fonts:** glyph width lookup currently only reads `/Widths` (simple fonts); CID fonts fall back to a standard 0.5 em width, verified safe (no crash) but not pixel-precise for bbox positioning. The same fallback is used for the `code` block-role detector, so monospace CID fonts are only detected via font-name matching, not structural width analysis. See `ARCHITECTURE.md` decision log.
 - **Content stream filters outside the supported set:** Tier 1 extraction decodes `FlateDecode`, `LZWDecode`, `ASCII85Decode`, `ASCIIHexDecode`, and `RunLengthDecode` — all five are decoded natively by lopdf 0.44 and are on the extractor's supported-filter allowlist, so pages using them yield real digital text. `ASCII85Decode` (found in older PDF generators and some `reportlab` output) was a known gap in earlier releases and is now fully supported, covered end-to-end by `test_ascii85_digital_extraction`. PDFs whose content streams use any *other* filter (e.g. `JBIG2Decode`, or a `/Crypt` filter) still produce zero text blocks from Tier 1 and are routed to Tier 2 OCR. This remains non-silent — affected pages surface a `warnings` array in the response metadata (`result["metadata"]["warnings"]`) so callers can detect and handle it programmatically. One gap remains within the supported set: a **corrupt ASCII85 stream currently fails silently to OCR fallback rather than raising a warning or error** — the page is reported as `tier: "scanned"` with an empty `warnings` array, indistinguishable from a genuine scan. Tracked for a future release.
 - **Heading detection false positives:** heading classification is based purely on font-size ratio, weight, and line length relative to the document's own body text — it has no semantic understanding of document structure. Stylistically-emphasized text that isn't a real section heading (e.g., a bolded date range, a pull-quote) can be misclassified as `block_role: "heading"`. See `ARCHITECTURE.md` decision log for the specific tradeoff.

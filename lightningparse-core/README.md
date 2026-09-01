@@ -78,16 +78,24 @@ except CorruptPdfError as e:
     print("Unparseable:", e)
 ```
 
-## What's New in v0.4.1
+## What's New in v0.5.0
+
+- **Fixed silent content loss in header/footer detection.** Margin bands were a fraction of *content extent* rather than the page's real height, so the band reached below the true margin into body text — and blocks tagged as page furniture are dropped before chunking. Across 7 documents, **19 blocks of real content were being deleted**, including document titles, author lines and chapter headings. Bands now derive from real page geometry.
+- **Removed the page-1-only header/footer fallback**, which tagged top/bottom blocks on position alone with no cross-page corroboration and caused 8 of those 19 deletions. Its footnote branch is retained.
+- **Page geometry exposed in the schema:** optional `page_width` / `page_height` per page, from `/CropBox` or `/MediaBox`, inherited via a cycle-safe `/Parent` walk, axes swapped for `/Rotate 90|270`. Falls back to previous behaviour when absent.
+
+**Behaviour change:** fewer blocks are tagged as page furniture, so more content reaches downstream consumers. Strictly one-directional — 19 blocks freed, **0** newly tagged.
+
+<details>
+<summary>Earlier releases</summary>
+
+### v0.4.1
 
 - **Content stream filter support (`ASCII85Decode` and friends)**: Tier 1 extraction previously decoded only `FlateDecode` and `LZWDecode`. Content streams using any other filter yielded zero extractable characters and were misrouted to Tier 2 OCR — producing degraded OCR output for pages that contained perfectly good digital text. Upgrading to `lopdf` 0.44 and widening the supported-filter allowlist adds `ASCII85Decode`, `ASCIIHexDecode`, and `RunLengthDecode`. Filters outside the supported five still emit a per-page warning and route to OCR, so the visibility mechanism added in v0.3.0 is retained as a safety net.
 - **Fault-tolerant page tree traversal**: `lopdf`'s strict page tree parser is replaced with a custom tolerant tree walker modelled on `PyPDF2`. PDFs that omit or mis-capitalize `/Type /Pages` or `/Type /Page` now extract successfully instead of failing outright, and circular reference loops abort safely rather than looping.
 - **Explicit error propagation**: the FFI boundary raises `CorruptPdfError` on fatal parse errors instead of returning an empty pages array.
 - **Correct handling of multi-stream pages**: a page whose `/Contents` is an array of several streams is now joined with an explicit separator, so streams meeting at a token boundary no longer fuse the adjacent operators into a single invalid token — which previously corrupted the text-object structure with no error raised.
 - **First release published as platform wheels** rather than a source distribution alone, so installation no longer requires a Rust toolchain.
-
-<details>
-<summary>Earlier releases</summary>
 
 ### v0.3.0
 
@@ -124,13 +132,17 @@ Full design details: [ARCHITECTURE.md](https://github.com/ShivamMalge/LightningP
 
 ## Benchmarks
 
-LightningParse is **6.0×–93.1× faster** than pypdf/pdfplumber on digital-native (Tier 1) PDFs, with the gap widening on longer documents:
+LightningParse is **12.7×–49.2× faster than pypdf** and **41.0×–78.2× faster than pdfplumber** on the representative digital-native (Tier 1) documents below, with the gap widening on longer documents:
 
 | Document | Pages | LightningParse (median) | pypdf | pdfplumber |
 |---|---:|---:|---:|---:|
-| Multi-page IEEE paper | 8 | 0.61 ms | 7.89 ms (12.9× slower) | 56.82 ms (93.1× slower) |
-| Two-column academic paper | 15 | 41.12 ms | 951.92 ms (23.1× slower) | 2579.90 ms (62.7× slower) |
-| Single-page resume | 1 | 6.82 ms | 82.14 ms (12.0× slower) | 208.42 ms (30.6× slower) |
+| Multi-page IEEE paper | 8 | 1.61 ms | 21.71 ms (13.5× slower) | 116.27 ms (72.2× slower) |
+| Two-column academic paper | 15 | 85.16 ms | 4191.24 ms (49.2× slower) | 6657.49 ms (78.2× slower) |
+| Single-page resume | 1 | 13.48 ms | 171.09 ms (12.7× slower) | 553.08 ms (41.0× slower) |
+
+> **Absolute milliseconds are machine-dependent** and will vary with hardware, thermal state and background load. The portable claim is the **speedup ratio** — the baselines are timed on the same machine in the same run, so hardware cancels out. This session's own investigation demonstrated it: these absolute figures moved ~2x from the previous published set while pypdf and pdfplumber (code LightningParse does not touch) moved 2.4-3.5x, i.e. the shift was hardware, not the codebase. See [methodology](https://github.com/ShivamMalge/LightningParse/blob/main/benchmarks/BENCHMARKS.md).
+
+Trivial single-page synthetic fixtures span wider in both directions (4.2×–503.6×), because at that size the ratio is dominated by fixed overhead rather than extraction work. They are not quoted as headline figures.
 
 OCR (Tier 2) and mixed-document handling are benchmarked separately — pypdf and pdfplumber can't perform OCR, so comparing their near-instant-but-empty results against actual OCR time would mislead rather than inform.
 
@@ -140,6 +152,7 @@ Full methodology and per-document results: [benchmarks/BENCHMARKS.md](https://gi
 
 ## Known Limitations
 
+- **Page furniture is under-removed on long documents:** header/footer detection requires a repeated block to appear on ≥70% of pages. Running heads usually change per chapter, so on a long book nothing clusters that widely and **no furniture is removed at all** — measured on a 1475-page textbook whose site-wide footer appears on 734 pages and is still not stripped. Separately, a bare page number normalises to an empty string during clustering and can never be tagged. Both mean folios and running heads can flow into `body` text and into chunks.
 - **Corrupt ASCII85 streams fail silently to OCR:** a *corrupt or truncated* `ASCII85Decode` stream is not reported. The underlying decoder returns the raw undecoded bytes on failure rather than an error, so the page yields no text and falls through to OCR, reported as `tier: "scanned"` with an empty `warnings` array — indistinguishable from a genuine scan. Undecodable *filters* are still reported normally; this affects only corrupt data within a supported filter. Tracked for a future release.
 - **Content stream filters outside the supported set:** `FlateDecode`, `LZWDecode`, `ASCII85Decode`, `ASCIIHexDecode`, and `RunLengthDecode` are decoded. PDFs using any other filter (e.g. `JBIG2Decode`, or a `/Crypt` filter) produce no Tier 1 text and are routed to OCR, with a `warnings` entry so callers can detect it.
 - **Monospace detection on composite fonts:** the structural uniform-width check applies only to simple fonts with a `/Widths` array. CID/Type0 fonts bypass it and fall back to font-name matching (`"courier"`, `"mono"`), so an unconventionally-named monospace CID font may not be tagged `block_role: "code"`. Glyph *widths* for CID fonts are parsed correctly from `/W` and `/DW`.

@@ -23,16 +23,14 @@ pub mod page_tree;
 /// All pages are treated as Tier 1 (digital-native). Header/footer tagging
 /// and OCR fallback are not wired up yet (Phase 4 / Phase 5).
 #[allow(clippy::type_complexity)]
-pub fn extract_text(
-    doc: &Document,
-) -> Result<Vec<(u32, Vec<Block>, usize, Vec<String>)>, ParseError> {
+pub fn extract_text(doc: &Document) -> Result<Vec<(Page, usize, Vec<String>)>, ParseError> {
     let pages_map = page_tree::get_pages_tolerant(doc)?;
 
     // Collect entries so rayon can partition them across threads.
     let entries: Vec<(u32, ObjectId)> = pages_map.iter().map(|(&n, &id)| (n, id)).collect();
 
     // Extract pages in parallel; collect results and propagate first error.
-    let mut results: Vec<(u32, Vec<Block>, usize, Vec<String>)> = entries
+    let mut results: Vec<(Page, usize, Vec<String>)> = entries
         .par_iter()
         .map(|&(page_num, page_id)| {
             let (page, warnings) = extract_page(doc, page_num, page_id)?;
@@ -41,12 +39,12 @@ pub fn extract_text(
                 .iter()
                 .map(|b| b.text().trim().chars().count())
                 .sum();
-            Ok((page.page_num, page.blocks, total_chars, warnings))
+            Ok((page, total_chars, warnings))
         })
-        .collect::<Result<Vec<(u32, Vec<Block>, usize, Vec<String>)>, ParseError>>()?;
+        .collect::<Result<Vec<(Page, usize, Vec<String>)>, ParseError>>()?;
 
     // Sort by page_num — parallel execution may reorder results.
-    results.sort_by_key(|p| p.0);
+    results.sort_by_key(|(page, _, _)| page.page_num);
 
     Ok(results)
 }
@@ -59,6 +57,15 @@ fn extract_page(
     page_id: ObjectId,
 ) -> Result<(Page, Vec<String>), ParseError> {
     let mut warnings = Vec::new();
+
+    // Real page geometry, used by the cleanup pass to place margin bands.
+    // `None` is fine: cleanup falls back to its previous content-extent
+    // behaviour, so documents without usable geometry are unaffected.
+    let geometry = page_tree::resolve_page_geometry(doc, page_id);
+    let (page_width, page_height) = match geometry {
+        Some(g) => (Some(g.width), Some(g.height)),
+        None => (None, None),
+    };
 
     // Check for filters that lopdf cannot decode — those pages must fall back to OCR.
     // As of lopdf 0.44, supported filters are: FlateDecode, LZWDecode,
@@ -94,6 +101,8 @@ fn extract_page(
             Page {
                 page_num,
                 blocks: vec![],
+                page_width,
+                page_height,
             },
             warnings,
         ));
@@ -210,7 +219,15 @@ fn extract_page(
         })
         .collect();
 
-    Ok((Page { page_num, blocks }, warnings))
+    Ok((
+        Page {
+            page_num,
+            blocks,
+            page_width,
+            page_height,
+        },
+        warnings,
+    ))
 }
 
 fn coalesce_spans(spans: Vec<Span>) -> Vec<Span> {
@@ -1496,8 +1513,8 @@ mod tests {
         let pages_tuples = extract_text(&doc)?;
         let mut pages = Vec::new();
         let mut all_warnings = Vec::new();
-        for (page_num, blocks, _, mut warnings) in pages_tuples {
-            pages.push(crate::output::Page { page_num, blocks });
+        for (page, _, mut warnings) in pages_tuples {
+            pages.push(page);
             all_warnings.append(&mut warnings);
         }
         let page_count = pages.len() as u32;
