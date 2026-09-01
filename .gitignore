@@ -37,3 +37,6 @@ venv.bak/
 
 # Pytest
 .pytest_cache/
+
+# stability run artifacts
+benchmarks/diagnostic/bench_stability.json

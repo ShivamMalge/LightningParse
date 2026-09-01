@@ -141,3 +141,92 @@ published numbers are three releases stale and understate the parser's current
 feature set. That is a release task, not a blocker for the G4+G5 fix: the fix
 costs ~0.1% of parse time and nothing in the published table is attributable
 to it.
+
+
+---
+
+## Follow-up: is 5 runs + 1 warm-up enough to call a number stable?
+
+Prompted by pypdf on `ieee_template_placeholder.pdf` moving **21.71 → 35.43 ms**
+between consecutive runs on the same machine and code. Measured with
+`benchmarks/diagnostic/bench_stability.py` (200 samples on the IEEE fixture,
+60 on the resume).
+
+**Answer: the methodology is too thin. This is not a small-fixture artifact.**
+
+### The "sub-2 ms jitter" hypothesis is wrong
+
+Variance is machine-wide, not confined to fast fixtures — and the pypdf figure
+that moved is ~29 ms, not sub-2 ms:
+
+| Fixture | Library | Median | CV | max/min |
+|---|---|---:|---:|---:|
+| ieee (8 pp) | lightningparse | 1.60 ms | 24.6% | 3.51× |
+| ieee | pypdf | 29.34 ms | 20.9% | 2.08× |
+| ieee | pdfplumber | 155.99 ms | 15.9% | 2.01× |
+| resume (1 p) | lightningparse | 15.29 ms | 16.8% | 2.44× |
+| resume | pypdf | 183.11 ms | 24.7% | 2.36× |
+| resume | pdfplumber | 467.96 ms | 23.3% | 2.53× |
+
+CV sits at 16–25% for **every** library and fixture, including a 468 ms
+measurement. Nothing here is quantisation of a tiny timer.
+
+### The observed move was within expected sampling noise
+
+Bootstrapping the statistic `benchmark.py` actually reports — the median of 5
+consecutive runs — gives a **95% band of 21.88–36.91 ms** for pypdf on this
+fixture, a 52.8% spread. The observed 21.71 and 35.43 sit essentially at the two
+edges. So the move is *expected* under the current methodology, which is exactly
+the problem: the methodology admits a ±50% swing.
+
+| Fixture / library | median of k=5 | k=15 | k=30 |
+|---|---:|---:|---:|
+| ieee / lightningparse | **90.6%** | 35.5% | 25.1% |
+| ieee / pypdf | 49.2% | 43.9% | 38.4% |
+| ieee / pdfplumber | 27.5% | 13.6% | 9.1% |
+| resume / lightningparse | 59.0% | 18.8% | 14.5% |
+| resume / pypdf | 69.4% | 53.9% | 44.4% |
+
+### A real defect: one warm-up run is not enough, and it biases *our* numbers slow
+
+`WARMUP_RUNS = 1`, so the 5 timed runs still sit inside the warm-up ramp:
+
+| Fixture | Library | median of first 5 | median of rest | drift |
+|---|---|---:|---:|---:|
+| ieee | lightningparse | 3.00 ms | 1.60 ms | **+87.2%** |
+| ieee | pdfplumber | 181.52 ms | 155.40 ms | +16.8% |
+| resume | lightningparse | 21.71 ms | 15.22 ms | **+42.6%** |
+| resume | pdfplumber | 677.79 ms | 456.88 ms | +48.4% |
+| ieee | pypdf | 25.94 ms | 29.87 ms | −13.2% (none) |
+
+LightningParse and pdfplumber both ramp; pypdf does not. After 20 warm-up runs
+LightningParse measures **1.29 ms** on the IEEE fixture against the **1.69 ms**
+currently published — the published figure **understates our own performance by
+roughly 30%**. It is a conservative error, not an overclaim, so it does not
+invalidate any published comparison, but it should be corrected.
+
+### `min` is a better statistic than `median` here
+
+The minimum is the least-disturbed run, and it converges far faster:
+
+| Statistic | k=5 | k=15 | k=30 |
+|---|---:|---:|---:|
+| lightningparse, median of k | 40.8% | 24.9% | 15.4% |
+| lightningparse, **min** of k | **22.2%** | **10.4%** | **8.8%** |
+| pypdf, median of k | 52.8% | 45.3% | 37.3% |
+| pypdf, **min** of k | 53.4% | 44.9% | **25.2%** |
+
+### Recommendation
+
+1. **Raise `WARMUP_RUNS` 1 → 10 and `TIMED_RUNS` 5 → 25.** Uncontroversial: it
+   keeps the reported statistic's meaning and removes both the ramp bias and most
+   of the sampling spread.
+2. **Consider reporting `min` alongside `median`.** This changes what the table
+   means, so it is a judgement call rather than a straight fix.
+3. **Treat the IEEE fixture's absolute numbers with extra scepticism regardless** —
+   at ~1.6 ms for LightningParse, the ratio is dominated by each library's fixed
+   startup cost rather than extraction work.
+
+None of this changes the v0.5.0 correctness fix or the conclusion that the
+geometry lookup costs ~0.1% of parse time — that was established by a direct
+Rust micro-benchmark, not by these Python-level timings.
