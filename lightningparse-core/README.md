@@ -128,7 +128,7 @@ Two processing tiers, selected per page:
 
 Documents containing both report `tier: "mixed"`.
 
-Full design details: [ARCHITECTURE.md](https://github.com/ShivamMalge/LightningParse/blob/main/ARCHITECTURE.md) · Product scope: [PRD.md](https://github.com/ShivamMalge/LightningParse/blob/main/PRD.md)
+Full design details: [ARCHITECTURE.md](https://github.com/ShivamMalge/LightningParse/blob/main/docs/ARCHITECTURE.md) · Product scope: [PRD.md](https://github.com/ShivamMalge/LightningParse/blob/main/docs/PRD.md)
 
 ## Benchmarks
 
@@ -165,7 +165,7 @@ Full methodology and per-document results: [benchmarks/BENCHMARKS.md](https://gi
 
 **In scope:** digital-native PDF extraction, header/footer/footnote removal, semantic block typing, OCR fallback for scanned pages, and metadata-aware output suitable for chunking.
 
-**Not in scope yet:** encrypted/form PDFs, ML-based layout detection. See [PRD.md](https://github.com/ShivamMalge/LightningParse/blob/main/PRD.md) §2 — these are deliberate cuts, not oversights.
+**Not in scope yet:** encrypted/form PDFs, ML-based layout detection. See [PRD.md](https://github.com/ShivamMalge/LightningParse/blob/main/docs/PRD.md) §2 — these are deliberate cuts, not oversights.
 
 ## Contributing
 

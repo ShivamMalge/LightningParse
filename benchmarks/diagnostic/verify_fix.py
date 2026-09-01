@@ -1,4 +1,4 @@
-"""PHASES-MARGIN-BANDS.md Phase 4 — verify the fix matches the prediction.
+"""docs/PHASES-MARGIN-BANDS.md Phase 4 — verify the fix matches the prediction.
 
 Before the fix, `simulate_cleanup.py` re-implemented the OLD tagging logic,
 was validated to reproduce the real parser exactly, and then forecast the change
@@ -28,7 +28,7 @@ from simulate_cleanup import simulate, targets  # noqa: E402
 
 FURNITURE = ("header", "footer", "footnote")
 
-# The change set forecast BEFORE the fix was written, from PHASES-MARGIN-BANDS.md.
+# The change set forecast BEFORE the fix was written, from docs/PHASES-MARGIN-BANDS.md.
 PREDICTED = {
     "f5a_pagelabels.pdf": 4,
     "arxiv_twocolumn.pdf": 4,

@@ -51,7 +51,7 @@ pub fn parse_pdf_to_result(path: &str) -> Result<ParseResult, ParseError> {
     // higher than this number. On a 15-page two-column paper: ~44 ms here,
     // ~68 ms for the full `parse_pdf()` call, ~77 ms including `json.loads`.
     // Deliberately not renamed — it is a published output field.
-    // See FINDINGS-BENCHMARK-DISCREPANCY.md.
+    // See docs/FINDINGS-BENCHMARK-DISCREPANCY.md.
     let parse_time_ms = start.elapsed().as_millis() as u64;
     let page_count = pages.len() as u32;
 

@@ -1,7 +1,7 @@
-"""Diagnostic harness for NEW_PHASES.md.
+"""Diagnostic harness for docs/NEW_PHASES.md.
 
 Exists because `benchmarks/benchmark.py` is structurally incapable of surfacing
-the failures NEW_PHASES.md hunts (finding G10): it reads metadata.tier and
+the failures docs/NEW_PHASES.md hunts (finding G10): it reads metadata.tier and
 metadata.page_count and never reads metadata.warnings — the exact omission that
 turned a known ASCII85 limitation into a phantom "quality problem" in an earlier
 session.
@@ -41,7 +41,7 @@ def page_geometry(pdf_path: str) -> Dict[int, Dict[str, float]]:
 
     The parser's output carries no page geometry, so anything derived from
     "page height" would otherwise have to use the CONTENT extent as a proxy —
-    which is exactly the defect recorded as G4 in NEW_PHASES.md, and which was
+    which is exactly the defect recorded as G4 in docs/NEW_PHASES.md, and which was
     then observed biting the Tier A harvester on `arxiv_twocolumn.pdf` p3 (a
     short figure page whose content reaches only y=390, putting the real folio
     outside a content-derived band). Reading MediaBox here keeps that fix on the

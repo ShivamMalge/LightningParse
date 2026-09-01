@@ -1,4 +1,4 @@
-"""Generate the mixed-page-size fixture for PHASES-MARGIN-BANDS.md Phase 2.
+"""Generate the mixed-page-size fixture for docs/PHASES-MARGIN-BANDS.md Phase 2.
 
 Synthetic, no real content, so it is committed.
 

@@ -1,6 +1,6 @@
 """Slice a chapter out of a large open-licensed textbook into a working fixture.
 
-Real textbook content NEVER enters this repository (NEW_PHASES.md sourcing rule).
+Real textbook content NEVER enters this repository (docs/NEW_PHASES.md sourcing rule).
 This script is committed; its inputs and outputs both live outside the repo, under
 $LP_DIAG_CORPUS (default: ../lp-diagnostic-corpus, a sibling of the repo).
 

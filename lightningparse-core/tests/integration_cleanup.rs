@@ -271,7 +271,7 @@ fn test_reading_order_arxiv_twocolumn() {
 
 // ─── Regression tests for the G4/G5 margin-band fix ─────────────────
 //
-// See PHASES-MARGIN-BANDS.md and FINDINGS-CONTENT-EXTENT-BANDS.md.
+// See docs/PHASES-MARGIN-BANDS.md and docs/FINDINGS-CONTENT-EXTENT-BANDS.md.
 // Margin bands were derived from CONTENT extent rather than page geometry, and
 // a page-1-only fallback tagged header/footer on position alone. Between them
 // they tagged real body content as page furniture, which the chunker drops.

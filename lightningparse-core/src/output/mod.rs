@@ -1,4 +1,4 @@
-//! Structured output types matching the JSON schema in ARCHITECTURE.md §3.1.
+//! Structured output types matching the JSON schema in docs/ARCHITECTURE.md §3.1.
 
 use serde::{Deserialize, Serialize};
 

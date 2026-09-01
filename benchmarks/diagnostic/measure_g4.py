@@ -1,6 +1,6 @@
 """Quantify G4 — margin bands derived from CONTENT extent instead of page geometry.
 
-G4 (NEW_PHASES.md): `detect_headers_footers` computes its top/bottom margin bands
+G4 (docs/NEW_PHASES.md): `detect_headers_footers` computes its top/bottom margin bands
 from `global_max_y`, the maximum block extent across the WHOLE document, rather
 than from each page's MediaBox. Two consequences, both measurable:
 

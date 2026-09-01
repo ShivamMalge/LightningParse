@@ -1,4 +1,4 @@
-"""NEW_PHASES.md Phase 1 — Citation Fidelity A: printed label vs. PDF index.
+"""docs/NEW_PHASES.md Phase 1 — Citation Fidelity A: printed label vs. PDF index.
 
 Measures, for a fixture with known ground truth:
   1. what page number LightningParse would cause Aakar to cite  (= pdf_page_index)
@@ -314,7 +314,7 @@ def main() -> int:
         print(f"    section_id={sec:<8}: {cnt} pages{note}")
 
     print("\n" + "=" * 72)
-    print("BARS (set before running, per NEW_PHASES.md)")
+    print("BARS (set before running, per docs/NEW_PHASES.md)")
     print(f"  digital body pages -> correct printed label : "
           f"{body_correct}/{nbody} = {100.0*body_correct/nbody:.0f}%  (bar 100%)  "
           f"{'PASS' if body_correct==nbody else 'FAIL'}")

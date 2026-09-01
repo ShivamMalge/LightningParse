@@ -36,14 +36,14 @@ them apart matters: conflating them inflates G4 by 8×.
 
 | | Reference height | Applies to | Finding |
 |---|---|---|---|
-| Cross-page band | `global_max_y * 0.90` — tallest block in the **whole document** ([`cleanup/mod.rs:31-49`](lightningparse-core/src/cleanup/mod.rs#L31-L49)) | all pages | **G4** |
-| Page-1 fallback | `page_max_y * 0.90` — tallest block **on page 1** ([`cleanup/mod.rs:124-147`](lightningparse-core/src/cleanup/mod.rs#L124-L147)) | page 1 only, no cross-page corroboration | **G5** |
+| Cross-page band | `global_max_y * 0.90` — tallest block in the **whole document** ([`cleanup/mod.rs:31-49`](../lightningparse-core/src/cleanup/mod.rs#L31-L49)) | all pages | **G4** |
+| Page-1 fallback | `page_max_y * 0.90` — tallest block **on page 1** ([`cleanup/mod.rs:124-147`](../lightningparse-core/src/cleanup/mod.rs#L124-L147)) | page 1 only, no cross-page corroboration | **G5** |
 
 Because a page's content essentially never reaches the physical top of the
 paper, both references are systematically *lower* than the true margin, so both
 bands reach **down into body text**. A block caught this way is tagged `header`
 or `footer`, and the chunker then **drops it outright**
-([`chunker.py:33`](lightningparse-api/chunking/chunker.py#L33)) — it never
+([`chunker.py:33`](../lightningparse-api/chunking/chunker.py#L33)) — it never
 reaches retrieval.
 
 G4 carries a second consequence G5 does not: `global_max_y` is a single

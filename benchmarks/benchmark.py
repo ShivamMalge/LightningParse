@@ -26,7 +26,7 @@ BENCHMARKS_MD = Path(__file__).parent / "BENCHMARKS.md"
 # Number of warm-up + timed iterations per file
 # Raised from 1/5 after measuring the sampling stability of the old settings
 # (benchmarks/diagnostic/bench_stability.py, findings in
-# FINDINGS-BENCHMARK-DISCREPANCY.md).
+# docs/FINDINGS-BENCHMARK-DISCREPANCY.md).
 #
 # WARMUP_RUNS = 1 left the timed window inside the warm-up ramp: LightningParse's
 # first five runs measured 87% slower than subsequent ones on the IEEE fixture

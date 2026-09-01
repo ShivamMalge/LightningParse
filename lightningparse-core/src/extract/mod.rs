@@ -17,7 +17,7 @@ pub mod page_tree;
 
 /// Extract structured text from a digital-native PDF loaded into memory.
 ///
-/// Returns a [`ParseResult`] matching the JSON schema in ARCHITECTURE.md §3.1.
+/// Returns a [`ParseResult`] matching the JSON schema in docs/ARCHITECTURE.md §3.1.
 /// Pages are processed in parallel via `rayon` and then sorted by page number
 /// to guarantee deterministic document-order output.
 /// All pages are treated as Tier 1 (digital-native). Header/footer tagging

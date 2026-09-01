@@ -14,9 +14,9 @@ Measured 2026-09-01. Reproduce with `benchmarks/diagnostic/bench_stages.py`.
 They measure different things, and the gap is expected.
 
 `parse_time_ms` is stopped at the end of `parse_pdf_to_result`
-([`lib.rs:47`](lightningparse-core/src/lib.rs#L47)). The FFI entry point then does
+([`lib.rs:47`](../lightningparse-core/src/lib.rs#L47)). The FFI entry point then does
 substantially more work *after* that timer stops
-([`ffi/mod.rs:63-72`](lightningparse-core/src/ffi/mod.rs#L63-L72)):
+([`ffi/mod.rs:63-72`](../lightningparse-core/src/ffi/mod.rs#L63-L72)):
 
 1. `detect_tables`
 2. `reconstruct_reading_order`

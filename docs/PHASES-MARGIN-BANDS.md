@@ -108,7 +108,7 @@ is a strict improvement: PDFs that work today cannot get worse.
 ### D5 — Schema: expose page geometry?
 
 Cleanup runs on `output::Page`, which carries only `page_num` and `blocks`
-([`output/mod.rs:13-17`](lightningparse-core/src/output/mod.rs#L13-L17)), so
+([`output/mod.rs:13-17`](../lightningparse-core/src/output/mod.rs#L13-L17)), so
 geometry must be plumbed from extraction.
 
 **Recommendation: add optional `page_width` / `page_height` to `output::Page`.**
@@ -120,7 +120,7 @@ recover page dimensions the parser already had in hand. Requires an
 ### D6 — Which half of the page-1 fallback to remove?
 
 The fallback has three branches: footnote, header, footer.
-[`cleanup/mod.rs:133`](lightningparse-core/src/cleanup/mod.rs#L133) is the
+[`cleanup/mod.rs:133`](../lightningparse-core/src/cleanup/mod.rs#L133) is the
 **only site in the entire codebase that ever assigns `section_id: "footnote"`**.
 Removing the fallback wholesale would make a documented schema value dead.
 

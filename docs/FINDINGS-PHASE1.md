@@ -25,11 +25,11 @@ not the published wheel.
 
 | Artifact | Purpose |
 |---|---|
-| [`benchmarks/diagnostic/make_f5a.py`](benchmarks/diagnostic/make_f5a.py) | Generates F5a. Synthetic, no real content, so it is committed. |
-| [`benchmarks/diagnostic/fixtures/f5a_pagelabels.pdf`](benchmarks/diagnostic/fixtures/f5a_pagelabels.pdf) | 20 pages: 6 front matter (roman i–vi), 14 body (arabic restarting at 1). Carries **both** a `/PageLabels` tree and the label as ink in a centered footer. |
-| [`benchmarks/diagnostic/harness.py`](benchmarks/diagnostic/harness.py) | Per-**block** dump (`section_id`, `block_role`, `source`, `bbox`, reading-order index) + `metadata.warnings` verbatim. **Refuses to report if warnings are present and not acknowledged** via `--ack-warnings`. |
-| [`benchmarks/diagnostic/measure_phase1.py`](benchmarks/diagnostic/measure_phase1.py) | The Phase 1 measurement, including the Tier A harvester and its monotonicity self-check. Keeps `harvest_labels_naive` alongside the real one so the before/after is visible rather than asserted. |
-| [`benchmarks/diagnostic/sweep_corpus.py`](benchmarks/diagnostic/sweep_corpus.py) | Runs every available PDF through the Phase 1 machinery. Built to de-risk the harvester on real documents before real textbooks are sourced — and it immediately found three harvester bugs. |
+| [`benchmarks/diagnostic/make_f5a.py`](../benchmarks/diagnostic/make_f5a.py) | Generates F5a. Synthetic, no real content, so it is committed. |
+| [`benchmarks/diagnostic/fixtures/f5a_pagelabels.pdf`](../benchmarks/diagnostic/fixtures/f5a_pagelabels.pdf) | 20 pages: 6 front matter (roman i–vi), 14 body (arabic restarting at 1). Carries **both** a `/PageLabels` tree and the label as ink in a centered footer. |
+| [`benchmarks/diagnostic/harness.py`](../benchmarks/diagnostic/harness.py) | Per-**block** dump (`section_id`, `block_role`, `source`, `bbox`, reading-order index) + `metadata.warnings` verbatim. **Refuses to report if warnings are present and not acknowledged** via `--ack-warnings`. |
+| [`benchmarks/diagnostic/measure_phase1.py`](../benchmarks/diagnostic/measure_phase1.py) | The Phase 1 measurement, including the Tier A harvester and its monotonicity self-check. Keeps `harvest_labels_naive` alongside the real one so the before/after is visible rather than asserted. |
+| [`benchmarks/diagnostic/sweep_corpus.py`](../benchmarks/diagnostic/sweep_corpus.py) | Runs every available PDF through the Phase 1 machinery. Built to de-risk the harvester on real documents before real textbooks are sourced — and it immediately found three harvester bugs. |
 
 F5a carries two independent label carriers on purpose — machine-readable
 `/PageLabels` metadata and human-readable ink — so the measurement can
@@ -84,7 +84,7 @@ chunk | cites page | book prints
 ```
 
 `Document.metadata["page_num"]` is the raw PDF index, straight from
-[`chunker.py:22`](lightningparse-api/chunking/chunker.py#L22). 20 chunks, one
+[`chunker.py:22`](../lightningparse-api/chunking/chunker.py#L22). 20 chunks, one
 per page — confirming **G12** (no chunk spans two pages), so page attribution is
 structurally unambiguous and only the *value* is wrong.
 
@@ -122,7 +122,7 @@ PDFs is what actually tested it, and the first version failed.
 
 ### The corpus sweep
 
-[`sweep_corpus.py`](benchmarks/diagnostic/sweep_corpus.py) runs every available
+[`sweep_corpus.py`](../benchmarks/diagnostic/sweep_corpus.py) runs every available
 PDF through the Phase 1 machinery. On real documents the naive harvester —
 "first bare numeral in either margin band" — reported **13/15 coverage on
 `arxiv_twocolumn.pdf` while getting three of those pages wrong**:
@@ -212,7 +212,7 @@ would be dishonest to sit on it.
 
 **19 of 20 printed labels survive as `section_id: "body"`.** Exactly one does
 not — **page 1**, whose label `i` was tagged `footer` and is therefore deleted by
-the chunker ([`chunker.py:33`](lightningparse-api/chunking/chunker.py#L33)).
+the chunker ([`chunker.py:33`](../lightningparse-api/chunking/chunker.py#L33)).
 That is **G5 confirmed**: the page-1-only fallback classifies page 1 by a
 different rule than every other page.
 
@@ -331,7 +331,7 @@ subject, and both now have real evidence rather than a source reading.
 *Biology 2e* reports `tier: "mixed"`. It has **zero OCR-sourced blocks** — all
 70,269 are `source: "digital"`. The cause is pages 1–2 (image-only cover)
 yielding no text, which increments the scanned-page counter in
-[`lib.rs:28-33`](lightningparse-core/src/lib.rs#L28-L33) regardless of whether
+[`lib.rs:28-33`](../lightningparse-core/src/lib.rs#L28-L33) regardless of whether
 OCR recovered anything.
 
 So `tier: "mixed"` here means *"2 pages had no text layer"*, **not** *"2 pages

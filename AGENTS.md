@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instructions for AI coding agents (Claude Code, etc.) working in this repository. Read this before making changes. See `PRD.md` for product scope and `ARCHITECTURE.md` for system design — this file is about how to work in the codebase day to day.
+Instructions for AI coding agents (Claude Code, etc.) working in this repository. Read this before making changes. See `docs/PRD.md` for product scope and `docs/ARCHITECTURE.md` for system design — this file is about how to work in the codebase day to day.
 
 ---
 
@@ -70,12 +70,12 @@ Never hand-edit `benchmarks/BENCHMARKS.md` — it's generated output. If it look
 
 ## 3. Non-Negotiable Rules
 
-These map directly to decisions in `ARCHITECTURE.md` — don't relitigate them in a PR without updating that doc first.
+These map directly to decisions in `docs/ARCHITECTURE.md` — don't relitigate them in a PR without updating that doc first.
 
 1. **No business logic in `ffi/`.** Extraction, cleanup, and OCR logic must be testable via `cargo test` with zero Python involvement. If you find yourself importing PyO3 types outside `ffi/`, stop and restructure.
 2. **No panics across the FFI boundary.** Every fallible operation in the Rust core returns `Result<T, ParseError>`. A malformed PDF must produce a mapped Python exception, never crash the process.
 3. **GIL must be released during parsing.** Any FFI entry point that does real parsing work wraps the call in `Python::allow_threads`. If you add a new entry point, check this.
-4. **Tier routing is per-page, not per-document.** Don't "simplify" this to a per-document check — real PDFs are frequently mixed, and this is called out explicitly as core to correctness in `ARCHITECTURE.md` §7.
+4. **Tier routing is per-page, not per-document.** Don't "simplify" this to a per-document check — real PDFs are frequently mixed, and this is called out explicitly as core to correctness in `docs/ARCHITECTURE.md` §7.
 5. **Tier 1 and Tier 2 benchmark numbers are never averaged together.** If you touch `benchmark.py`, keep the reporting split. A combined number hides regressions and misrepresents the speed claim.
 6. **Every performance claim needs a corresponding benchmark run.** Don't add speed/accuracy language to `README.md` without a number in `BENCHMARKS.md` backing it.
 7. **Header/footer detection tags, doesn't delete.** Flagged blocks get `section_id: "header"/"footer"`, not removal from the output — downstream consumers decide whether to filter them.
@@ -99,8 +99,8 @@ These map directly to decisions in `ARCHITECTURE.md` — don't relitigate them i
 ## 5. When Adding a Feature
 
 Before writing code, check:
-- Does this belong in Rust (`lightningparse-core`) or Python (`lightningparse-api`)? Rule of thumb: anything before "clean structured JSON" is Rust; anything after is Python. See `ARCHITECTURE.md` §2.
-- Does it affect the FFI schema (§3.1 in `ARCHITECTURE.md`)? If so, update the schema doc in the same PR.
+- Does this belong in Rust (`lightningparse-core`) or Python (`lightningparse-api`)? Rule of thumb: anything before "clean structured JSON" is Rust; anything after is Python. See `docs/ARCHITECTURE.md` §2.
+- Does it affect the FFI schema (§3.1 in `docs/ARCHITECTURE.md`)? If so, update the schema doc in the same PR.
 - Does it change Tier 1 or Tier 2 behavior? Run the relevant benchmark before and after, and note the delta in the PR description.
 - Does it introduce a new dependency? Justify it — this project intentionally avoids adding dependencies "just in case" (e.g., `pyo3-polars` is explicitly optional, only pulled in if table extraction is prioritized — see PRD §8).
 
@@ -115,7 +115,7 @@ Before writing code, check:
 
 ## 7. Things to Never Do
 
-- Don't optimize FFI serialization before profiling shows it's a bottleneck (see `ARCHITECTURE.md` §7 decision log)
+- Don't optimize FFI serialization before profiling shows it's a bottleneck (see `docs/ARCHITECTURE.md` §7 decision log)
 - Don't merge a change to header/footer or tier-routing logic without re-running the accuracy benchmark
-- Don't add ML-based layout detection — out of scope for v1 per `PRD.md` §2 non-goals; if this changes, it changes in the PRD first
+- Don't add ML-based layout detection — out of scope for v1 per `docs/PRD.md` §2 non-goals; if this changes, it changes in the PRD first
 - Don't let `benchmark.py` silently swallow a failed baseline-library run — a missing comparison point is worse than no comparison

@@ -1,7 +1,7 @@
-"""Generate F5a — the synthetic /PageLabels control fixture for NEW_PHASES.md Phase 1.
+"""Generate F5a — the synthetic /PageLabels control fixture for docs/NEW_PHASES.md Phase 1.
 
 F5a is deliberately synthetic and committed: it contains no real textbook content,
-so it is exempt from the real-content-stays-out-of-the-repo rule in NEW_PHASES.md.
+so it is exempt from the real-content-stays-out-of-the-repo rule in docs/NEW_PHASES.md.
 
 Structure (20 pages):
   PDF index 1..6   front matter, printed labels i..vi   (roman lowercase)

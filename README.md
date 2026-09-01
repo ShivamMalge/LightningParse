@@ -2,7 +2,7 @@
 
 Fast, accurate PDF parsing for RAG pipelines — a Rust extraction core (via PyO3) feeding a Python chunking/embedding/retrieval pipeline.
 
-> **Status:** published on PyPI (`pip install lightningparse`). Core pipeline complete — Rust extraction, cleanup, OCR fallback, semantic block typing, chunking, retrieval, and generation are all implemented and benchmarked end-to-end. See [`PHASES.md`](./PHASES.md) for the original build roadmap and [`BENCHMARKS.md`](./benchmarks/BENCHMARKS.md) for full results.
+> **Status:** published on PyPI (`pip install lightningparse`). Core pipeline complete — Rust extraction, cleanup, OCR fallback, semantic block typing, chunking, retrieval, and generation are all implemented and benchmarked end-to-end. See [`docs/PHASES.md`](./docs/PHASES.md) for the original build roadmap and [`BENCHMARKS.md`](./benchmarks/BENCHMARKS.md) for full results.
 
 ## What's New in v0.5.0
 
@@ -42,8 +42,8 @@ Two processing tiers:
 - **Tier 1 — Digital-native PDFs:** direct text extraction, no OCR. This is where the speed claim is benchmarked.
 - **Tier 2 — Scanned/image PDFs:** routed per-page to OCR (Tesseract) when no text layer is present.
 
-Full design details: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
-Product scope and roadmap: [`PRD.md`](./PRD.md)
+Full design details: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+Product scope and roadmap: [`docs/PRD.md`](./docs/PRD.md)
 Contributor/agent instructions: [`AGENTS.md`](./AGENTS.md)
 
 ## Benchmarks
@@ -76,12 +76,12 @@ Results are published in `benchmarks/BENCHMARKS.md` — generated, not hand-writ
 ## Known Limitations
 
 - **Page furniture is under-removed on long documents:** header/footer detection requires a repeated block to appear on ≥70% of pages. Running heads usually change per chapter, so on a long book nothing clusters that widely and **no furniture is removed at all** — measured on a 1475-page textbook whose site-wide footer appears on 734 pages and is still not stripped. Separately, a bare page number normalises to an empty string during clustering and can never be tagged. Both mean folios and running heads can flow into `body` text and into chunks.
-- **CID/Type0 composite fonts:** glyph width lookup currently only reads `/Widths` (simple fonts); CID fonts fall back to a standard 0.5 em width, verified safe (no crash) but not pixel-precise for bbox positioning. The same fallback is used for the `code` block-role detector, so monospace CID fonts are only detected via font-name matching, not structural width analysis. See `ARCHITECTURE.md` decision log.
+- **CID/Type0 composite fonts:** glyph width lookup currently only reads `/Widths` (simple fonts); CID fonts fall back to a standard 0.5 em width, verified safe (no crash) but not pixel-precise for bbox positioning. The same fallback is used for the `code` block-role detector, so monospace CID fonts are only detected via font-name matching, not structural width analysis. See `docs/ARCHITECTURE.md` decision log.
 - **Content stream filters outside the supported set:** Tier 1 extraction decodes `FlateDecode`, `LZWDecode`, `ASCII85Decode`, `ASCIIHexDecode`, and `RunLengthDecode` — all five are decoded natively by lopdf 0.44 and are on the extractor's supported-filter allowlist, so pages using them yield real digital text. `ASCII85Decode` (found in older PDF generators and some `reportlab` output) was a known gap in earlier releases and is now fully supported, covered end-to-end by `test_ascii85_digital_extraction`. PDFs whose content streams use any *other* filter (e.g. `JBIG2Decode`, or a `/Crypt` filter) still produce zero text blocks from Tier 1 and are routed to Tier 2 OCR. This remains non-silent — affected pages surface a `warnings` array in the response metadata (`result["metadata"]["warnings"]`) so callers can detect and handle it programmatically. One gap remains within the supported set: a **corrupt ASCII85 stream currently fails silently to OCR fallback rather than raising a warning or error** — the page is reported as `tier: "scanned"` with an empty `warnings` array, indistinguishable from a genuine scan. Tracked for a future release.
-- **Heading detection false positives:** heading classification is based purely on font-size ratio, weight, and line length relative to the document's own body text — it has no semantic understanding of document structure. Stylistically-emphasized text that isn't a real section heading (e.g., a bolded date range, a pull-quote) can be misclassified as `block_role: "heading"`. See `ARCHITECTURE.md` decision log for the specific tradeoff.
-- **OCR noise:** Tesseract confidence-based filtering removes most scan artifacts (binder shadows, margin smudges) but some low-level noise can still pass through on real-world scans. OCR output is not expected to be flawless — see `PRD.md` non-goals.
+- **Heading detection false positives:** heading classification is based purely on font-size ratio, weight, and line length relative to the document's own body text — it has no semantic understanding of document structure. Stylistically-emphasized text that isn't a real section heading (e.g., a bolded date range, a pull-quote) can be misclassified as `block_role: "heading"`. See `docs/ARCHITECTURE.md` decision log for the specific tradeoff.
+- **OCR noise:** Tesseract confidence-based filtering removes most scan artifacts (binder shadows, margin smudges) but some low-level noise can still pass through on real-world scans. OCR output is not expected to be flawless — see `docs/PRD.md` non-goals.
 - **Tier 2/Mixed fixture coverage:** currently validated against a small number of real scanned/mixed fixtures rather than a broad corpus. On the synthetic `phone_photo_invoice.pdf` fixture specifically, heavy combined distortion (rotation + noise + lighting gradient + blur) caused the OCR confidence filter to discard all real content along with the noise — 0 of 7 real lines recovered. This demonstrates the system fails safely (no crash, no hallucinated garbage) under severe distortion, but does not currently recover text from heavily degraded scans. Speedup claims for Tier 1 are well-validated across multiple document types; Tier 2 performance numbers should be read as representative of the current fixtures, not a broad guarantee.
-- **Complex/borderless tables:** table detection requires a nearby caption (e.g. "Table 1") and consistent row/column geometry. Tables without captions, or with irregular formatting (superscripts breaking row alignment, merged cells), fall back to flat text rather than structured rows — no data is lost, but structure isn't always recovered. See `PRD.md`.
+- **Complex/borderless tables:** table detection requires a nearby caption (e.g. "Table 1") and consistent row/column geometry. Tables without captions, or with irregular formatting (superscripts breaking row alignment, merged cells), fall back to flat text rather than structured rows — no data is lost, but structure isn't always recovered. See `docs/PRD.md`.
 - **Encrypted/form PDFs:** not explicitly supported in v1.
 
 ## Install
@@ -125,7 +125,7 @@ if result["metadata"].get("warnings"):
 
 **In scope:** digital-native PDF extraction, header/footer/footnote removal, OCR fallback for scanned pages, structured table extraction, heading/code semantic block typing, metadata-aware chunking, retrieval + LLM Q&A pipeline with citations.
 
-**Not in scope yet:** full CID/Type0 structural width analysis, encrypted/form PDFs, ML-based layout detection, list/markdown-aware block typing. See `PRD.md` §2 for the full non-goals list — these are deliberate cuts, not oversights.
+**Not in scope yet:** full CID/Type0 structural width analysis, encrypted/form PDFs, ML-based layout detection, list/markdown-aware block typing. See `docs/PRD.md` §2 for the full non-goals list — these are deliberate cuts, not oversights.
 
 ## Contributing
 
