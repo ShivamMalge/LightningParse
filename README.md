@@ -48,17 +48,17 @@ Contributor/agent instructions: [`AGENTS.md`](./AGENTS.md)
 
 ## Benchmarks
 
-LightningParse is **12.7×–49.2× faster than pypdf** and **41.0×–78.2× faster than pdfplumber** on the representative digital-native (Tier 1) documents below, with the gap widening on longer documents:
+LightningParse is **12.8×–49.2× faster than pypdf** and **42.9×–93.6× faster than pdfplumber** on the representative digital-native (Tier 1) documents below, with the gap widening on longer documents:
 
 | Document | Pages | LightningParse (median) | pypdf | pdfplumber |
 |---|---:|---:|---:|---:|
-| Multi-page IEEE paper (`ieee_template_placeholder.pdf`) | 8 | 1.61 ms | 21.71 ms (13.5× slower) | 116.27 ms (72.2× slower) |
-| Two-column academic paper (`arxiv_twocolumn.pdf`) | 15 | 85.16 ms | 4191.24 ms (49.2× slower) | 6657.49 ms (78.2× slower) |
-| Single-page resume (`Shivam_FullStack.pdf`) | 1 | 13.48 ms | 171.09 ms (12.7× slower) | 553.08 ms (41.0× slower) |
+| Multi-page IEEE paper (`ieee_template_placeholder.pdf`) | 8 | 1.69 ms | 35.43 ms (21.0× slower) | 158.22 ms (93.6× slower) |
+| Two-column academic paper (`arxiv_twocolumn.pdf`) | 15 | 85.32 ms | 4197.94 ms (49.2× slower) | 6651.09 ms (78.0× slower) |
+| Single-page resume (`Shivam_FullStack.pdf`) | 1 | 12.95 ms | 165.71 ms (12.8× slower) | 555.03 ms (42.9× slower) |
 
 > **Absolute milliseconds are machine-dependent** and will vary with hardware, thermal state and background load. The portable claim is the **speedup ratio** — the baselines are timed on the same machine in the same run, so hardware cancels out. This session's own investigation demonstrated it: these absolute figures moved ~2x from the previous published set while pypdf and pdfplumber (code LightningParse does not touch) moved 2.4-3.5x, i.e. the shift was hardware, not the codebase. See [methodology](./benchmarks/BENCHMARKS.md).
 
-Trivial single-page synthetic fixtures in the corpus span wider in both directions (4.2×–503.6×), because at that size the ratio is dominated by each library's fixed overhead rather than by extraction work. They are not quoted as headline figures.
+Trivial single-page synthetic fixtures in the corpus span wider in both directions (4.9×–478.5×), because at that size the ratio is dominated by each library's fixed overhead rather than by extraction work. They are not quoted as headline figures.
 
 OCR (Tier 2) and mixed-document handling are also supported, benchmarked separately from Tier 1 — pypdf and pdfplumber can't perform OCR, so comparing their near-instant-but-empty results against LightningParse's actual OCR time would be misleading rather than informative. See `BENCHMARKS.md` for those numbers on their own terms.
 
