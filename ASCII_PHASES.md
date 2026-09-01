@@ -207,6 +207,16 @@ listing requires spending a new version number.
 must be merged *before* the tag is created. The tag is what CI builds from, so
 anything committed after it is invisible to that release.
 
+> ✅ **Rule held at v0.5.0.** Verified mechanically before the release could go
+> wrong rather than discovered afterwards: the last commit touching
+> `lightningparse-core/README.md` (`7c3446a`) *is* the tag commit, so it is an
+> ancestor of `v0.5.0` and the PyPI description is built from current content.
+> The check is one command and worth repeating at every tag:
+>
+> ```sh
+> git merge-base --is-ancestor >   "$(git log -1 --format=%H -- lightningparse-core/README.md)" >   "$(git rev-list -n1 vX.Y.Z)" && echo OK || echo "STALE DESCRIPTION"
+> ```
+
 ---
 
 ## After This Ships
